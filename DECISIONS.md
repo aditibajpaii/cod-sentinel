@@ -112,7 +112,7 @@ baseline would make the evidence misleading.
 
 **Status:** Accepted
 
-No bootstrap probability interval, LLM address parser, Razorpay API, database,
+No bootstrap probability interval, address-parser integration, Razorpay API, database,
 or webhook is part of the core. Customer-cluster bootstrap is used only for an
 evaluation interval on mean contribution improvement. Runtime uncertainty and
 external integrations require separate evidence and failure-mode tests.

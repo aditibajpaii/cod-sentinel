@@ -38,6 +38,6 @@
 
 ## Scope guardrails
 
-Do not add databases, authentication, containers, microservices, agents, LLMs,
-or payment integrations unless a later milestone explicitly requires and
-justifies them.
+Do not add databases, authentication, containers, microservices, autonomous
+agents, language-model integrations, or payment integrations unless a later
+milestone explicitly requires and justifies them.

@@ -3,6 +3,22 @@
 Every empirical statement below refers to the temporally held-out synthetic
 simulator. Do not remove that qualifier.
 
+**The hook, memorized first:** *"Risk is not the decision. We built the
+economic layer that sits after the risk score — and when the honest answer
+was that a simpler policy wins, we said so on stage instead of tuning it
+away."*
+
+**Numbers to have cold:**
+
+| | ₹/order |
+| --- | --- |
+| Always COD (baseline) | 152.78 |
+| COD Sentinel | 218.49 |
+| Always OTP (best simple baseline) | 242.31 |
+
+COD Sentinel: **+65.71 vs always-COD**, **−23.81 vs always-OTP**. COD RTO
+model: precision 0.411, recall 0.902, PR-AUC 0.505, Brier 0.227.
+
 ## 0:00–0:30 — Problem
 
 “An RTO classifier tells a merchant which COD orders look risky. It does not

@@ -1,30 +1,37 @@
 # COD Sentinel (RTO-X)
 
-COD Sentinel is a prototype risk-to-action economic decision engine for COD
-orders. It estimates COD RTO risk and action-specific outcomes, compares the
-expected contribution of COD, OTP, and prepaid, and evaluates the frozen policy
-against temporally held-out synthetic potential outcomes.
+**Razorpay Buildathon · Risk Manager**
+
+**Risk tells you what might happen. COD Sentinel decides what to do about it.**
+It estimates COD RTO risk and action-specific outcomes, prices the expected
+contribution of COD, OTP, and prepaid against each other, and evaluates the
+frozen policy against temporally held-out synthetic potential outcomes — a
+supervised decision engine, not a risk score.
 
 > Risk prediction is only the first step. The merchant decision is what to do
 > with that risk.
 
-## Frozen result
+## The result, up front
 
-On our temporally held-out synthetic simulator of 3,000 future orders:
+On our temporally held-out synthetic simulator of 3,000 future orders,
+realized contribution per order:
 
-- COD RTO model: precision **0.411**, recall **0.902**, PR-AUC **0.505**,
-  Brier score **0.227**.
-- Always COD realized contribution: **₹152.78/order**.
-- COD Sentinel realized contribution: **₹218.49/order**.
-- Always OTP: **₹242.31/order**.
-- COD Sentinel therefore improved on always-COD by **₹65.71/order** (95%
-  customer-cluster bootstrap interval ₹48.78–₹82.74), but **underperformed the
-  best simple baseline by ₹23.81/order**.
+| Policy | Contribution / order |
+| --- | --- |
+| Always COD (baseline) | ₹152.78 |
+| **COD Sentinel** | **₹218.49** |
+| Always OTP (best simple baseline) | ₹242.31 |
 
-That adverse result is not hidden. It shows that adding action models and an
-optimizer does not automatically create a better policy. In this simulator,
-OTP is broadly effective and the action-outcome models are not accurate enough
-to beat a near-universal OTP policy. See [FAILURES.md](FAILURES.md).
+COD Sentinel beats always-COD by **+₹65.71/order** (95% customer-cluster
+bootstrap interval ₹48.78–₹82.74) — and **trails the strongest simple
+baseline by ₹23.81/order**, with an entirely negative paired interval.
+
+That gap is not hidden. It shows that adding action models and an optimizer
+does not automatically create a better policy: this simulator's OTP is broadly
+effective, and the action-outcome models are not accurate enough to beat a
+near-universal OTP policy. See [FAILURES.md](FAILURES.md) for the diagnosis
+and what a v2 would need. The COD RTO model itself: precision **0.411**,
+recall **0.902**, PR-AUC **0.505**, Brier score **0.227**.
 
 All empirical language is scoped as:
 
