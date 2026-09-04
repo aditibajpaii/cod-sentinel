@@ -106,4 +106,5 @@ The dependency-ordered implementation plan is in [BUILD_PLAN.md](BUILD_PLAN.md).
 Architecture boundaries are summarized in
 [ARCHITECTURE.md](ARCHITECTURE.md). Assumptions and rejected approaches are in
 [DECISIONS.md](DECISIONS.md), [LIMITATIONS.md](LIMITATIONS.md), and
-[FAILURES.md](FAILURES.md).
+[FAILURES.md](FAILURES.md). The exact five-minute walkthrough is in
+[PITCH.md](PITCH.md).
