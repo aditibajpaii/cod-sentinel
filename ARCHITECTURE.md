@@ -16,6 +16,41 @@ Observable order
 
 Runtime code may use only information available when an order decision is made.
 
+## Economic state transitions
+
+All actions use the same three terminal branches:
+
+```text
+action attempted
+  ├─ not converted
+  └─ converted / shipped
+       ├─ delivered
+       └─ failed delivery (RTO or return)
+```
+
+- COD is already accepted, so its conversion probability is always one.
+- OTP conversion means verification completed; a completed OTP order proceeds
+  as COD and can still deliver or RTO.
+- Prepaid conversion means payment completed; a paid order can still deliver or
+  fail and be refunded.
+- REVIEW is not part of this graph or the economic argmax. It is a policy
+  fallback for invalid, missing, or unsafe runtime inputs.
+
+`economics.py` computes every realized branch first, then computes expected
+contribution as their probability-weighted sum. Break-even calculations are
+derived from those same realized branches.
+
+### Cost timing
+
+- OTP verification cost is incurred when OTP is attempted.
+- Packaging, forward shipping, and other fulfillment costs are incurred only
+  after conversion, when the order ships.
+- COD collection fees are incurred only after successful delivery.
+- Prepaid processing fees are incurred when payment converts and are modeled as
+  non-refundable.
+- A failed shipped order incurs reverse shipping and expected inventory loss.
+- A failed prepaid order additionally incurs its configured refund cost.
+
 ## Evaluation path
 
 ```text

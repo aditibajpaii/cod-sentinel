@@ -1,6 +1,7 @@
 """Central version identifiers for reproducible artifacts."""
 
 PROJECT_VERSION = "0.1.0"
+ECONOMICS_VERSION = "economics-v1"
 DGP_VERSION = "unimplemented"
 DATASET_VERSION = "unimplemented"
 FEATURE_VERSION = "unimplemented"
