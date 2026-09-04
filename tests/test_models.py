@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import numpy as np
 import pytest
 
@@ -63,3 +66,26 @@ def test_model_bundle_round_trip(small_bundle, tmp_path) -> None:
     actual = loaded.predict_all(observable.iloc[[0]])
     for name in TARGETS:
         np.testing.assert_allclose(actual[name], expected[name])
+
+
+def test_model_bundle_reloads_in_fresh_process(small_bundle, tmp_path) -> None:
+    bundle, _ = small_bundle
+    path = tmp_path / "model_bundle.joblib"
+    bundle.save(path)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from cod_sentinel.models import ModelBundle; "
+                f"bundle = ModelBundle.load({str(path)!r}); "
+                "assert len(bundle.models) == 5"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr

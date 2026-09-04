@@ -18,7 +18,7 @@ leakage:
 	$(PYTHON) -m cod_sentinel.leakage
 
 train:
-	$(PYTHON) -m cod_sentinel.models
+	$(PYTHON) -c "from cod_sentinel.models import main; main()"
 
 evaluate app:
 	@echo "$@ is intentionally unavailable until its implementation milestone."

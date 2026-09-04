@@ -76,12 +76,14 @@ class ModelBundle:
             raise ValueError(f"Model bundle is incomplete: {sorted(missing)}")
         return {name: self.models[name].predict(features) for name in TARGETS}
 
-    def save(self, path: Path = MODEL_BUNDLE_PATH) -> None:
+    def save(self, path: Path | str = MODEL_BUNDLE_PATH) -> None:
+        path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(self, path)
 
     @classmethod
-    def load(cls, path: Path = MODEL_BUNDLE_PATH) -> "ModelBundle":
+    def load(cls, path: Path | str = MODEL_BUNDLE_PATH) -> "ModelBundle":
+        path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"Model bundle not found: {path}")
         bundle = joblib.load(path)

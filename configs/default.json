@@ -1,0 +1,24 @@
+{
+  "config_version": "merchant-economics-v1",
+  "merchant_economics": {
+    "gross_margin_rate": 0.3,
+    "forward_shipping_cost": 60.0,
+    "reverse_shipping_cost": 80.0,
+    "packaging_cost": 15.0,
+    "other_fulfillment_cost": 5.0,
+    "cod_fee_rate": 0.015,
+    "cod_fee_flat": 5.0,
+    "otp_verification_cost": 2.0,
+    "prepaid_fee_rate": 0.02,
+    "prepaid_fee_flat": 0.0,
+    "prepaid_discount_rate": 0.02,
+    "prepaid_refund_cost": 5.0,
+    "inventory_damage_rate": 0.12,
+    "damaged_inventory_recovery_rate": 0.1
+  },
+  "tie_break_order": [
+    "COD",
+    "OTP",
+    "PREPAID"
+  ]
+}
