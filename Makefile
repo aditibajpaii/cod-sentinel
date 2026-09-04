@@ -11,6 +11,9 @@ test:
 smoke:
 	$(PYTHON) -c "import cod_sentinel; print(cod_sentinel.__version__)"
 
-generate train evaluate app:
+generate:
+	$(PYTHON) -m cod_sentinel.generator
+
+train evaluate app:
 	@echo "$@ is intentionally unavailable until its implementation milestone."
 	@exit 2

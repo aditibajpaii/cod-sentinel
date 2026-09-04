@@ -5,8 +5,13 @@ milestones. This module only defines cross-cutting reproducibility settings.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from cod_sentinel.versioning import CONFIG_VERSION
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
+RESULTS_DIR = PROJECT_ROOT / "results"
 
 
 @dataclass(frozen=True)

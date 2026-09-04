@@ -10,7 +10,13 @@ requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }
 authors = [{ name = "COD Sentinel" }]
 dynamic = ["version"]
-dependencies = []
+dependencies = [
+  "joblib>=1.4,<2",
+  "numpy>=2,<3",
+  "pandas>=2.2,<3",
+  "scikit-learn>=1.6,<2",
+  "streamlit>=1.40,<2",
+]
 
 [project.optional-dependencies]
 dev = [

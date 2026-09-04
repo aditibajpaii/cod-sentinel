@@ -2,8 +2,8 @@
 
 PROJECT_VERSION = "0.1.0"
 ECONOMICS_VERSION = "economics-v1"
-DGP_VERSION = "unimplemented"
-DATASET_VERSION = "unimplemented"
+DGP_VERSION = "synthetic-dgp-v1"
+DATASET_VERSION = "synthetic-orders-v1"
 FEATURE_VERSION = "unimplemented"
 MODEL_VERSION = "unimplemented"
 CALIBRATION_VERSION = "unimplemented"
