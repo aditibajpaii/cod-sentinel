@@ -1,0 +1,10 @@
+"""Central version identifiers for reproducible artifacts."""
+
+PROJECT_VERSION = "0.1.0"
+DGP_VERSION = "unimplemented"
+DATASET_VERSION = "unimplemented"
+FEATURE_VERSION = "unimplemented"
+MODEL_VERSION = "unimplemented"
+CALIBRATION_VERSION = "unimplemented"
+POLICY_VERSION = "unimplemented"
+CONFIG_VERSION = "scaffold-v1"

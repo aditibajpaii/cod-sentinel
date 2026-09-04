@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.hypothesis/
+*.egg-info/
+build/
+dist/
+
+# Generated locally; selected frozen artifacts may be force-added later.
+artifacts/*
+!artifacts/.gitkeep
+results/*
+!results/.gitkeep
