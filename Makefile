@@ -24,5 +24,4 @@ evaluate:
 	$(PYTHON) -c "from cod_sentinel.evaluation import main; main()"
 
 app:
-	@echo "$@ is intentionally unavailable until its implementation milestone."
-	@exit 2
+	$(PYTHON) -m streamlit run app.py
