@@ -20,6 +20,9 @@ leakage:
 train:
 	$(PYTHON) -c "from cod_sentinel.models import main; main()"
 
-evaluate app:
+evaluate:
+	$(PYTHON) -c "from cod_sentinel.evaluation import main; main()"
+
+app:
 	@echo "$@ is intentionally unavailable until its implementation milestone."
 	@exit 2
