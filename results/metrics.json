@@ -1,0 +1,488 @@
+{
+  "evidence_scope": "temporally held-out synthetic simulator",
+  "test_orders": 3000,
+  "versions": {
+    "dataset": "synthetic-orders-v2",
+    "dgp": "synthetic-dgp-v2",
+    "model": "outcome-models-v2",
+    "economics": "economics-v1",
+    "policy": "economic-policy-v1",
+    "config": "merchant-economics-v1"
+  },
+  "risk_model": {
+    "threshold": 0.25,
+    "precision": 0.4111635220125786,
+    "recall": 0.9017241379310345,
+    "f1": 0.5647948164146869,
+    "pr_auc": 0.5050420120887769,
+    "brier": 0.2266930968081461,
+    "ece": 0.025030824654911035,
+    "false_positive_count": 1498,
+    "calibration_bins": [
+      {
+        "bin": 0,
+        "count": 1,
+        "mean_predicted": 0.08948456328967849,
+        "observed_rate": 1.0
+      },
+      {
+        "bin": 1,
+        "count": 165,
+        "mean_predicted": 0.1706148500742551,
+        "observed_rate": 0.23636363636363636
+      },
+      {
+        "bin": 2,
+        "count": 764,
+        "mean_predicted": 0.2582602429863633,
+        "observed_rate": 0.28664921465968585
+      },
+      {
+        "bin": 3,
+        "count": 1043,
+        "mean_predicted": 0.3485071206743056,
+        "observed_rate": 0.3585810162991371
+      },
+      {
+        "bin": 4,
+        "count": 676,
+        "mean_predicted": 0.44526417272264174,
+        "observed_rate": 0.4822485207100592
+      },
+      {
+        "bin": 5,
+        "count": 279,
+        "mean_predicted": 0.5430638078635844,
+        "observed_rate": 0.5591397849462365
+      },
+      {
+        "bin": 6,
+        "count": 66,
+        "mean_predicted": 0.6362641384864378,
+        "observed_rate": 0.6212121212121212
+      },
+      {
+        "bin": 7,
+        "count": 4,
+        "mean_predicted": 0.7386151118832834,
+        "observed_rate": 0.75
+      },
+      {
+        "bin": 8,
+        "count": 2,
+        "mean_predicted": 0.8057858785156722,
+        "observed_rate": 0.5
+      }
+    ]
+  },
+  "outcome_model_diagnostics": {
+    "cod_rto": {
+      "target": "cod_rto",
+      "condition": null,
+      "rows": 3000,
+      "prevalence": 0.38666666666666666,
+      "pr_auc": 0.5050420120887769,
+      "brier": 0.2266930968081461,
+      "ece": 0.025030824654911035
+    },
+    "otp_completion": {
+      "target": "otp_completed",
+      "condition": null,
+      "rows": 3000,
+      "prevalence": 0.7943333333333333,
+      "pr_auc": 0.8456249400981979,
+      "brier": 0.16011790409462937,
+      "ece": 0.02190470201552159
+    },
+    "otp_rto": {
+      "target": "otp_rto_if_completed",
+      "condition": "otp_completed",
+      "rows": 2383,
+      "prevalence": 0.19471254720939993,
+      "pr_auc": 0.30027632429705764,
+      "brier": 0.15203849198313524,
+      "ece": 0.018638930786081906
+    },
+    "prepaid_conversion": {
+      "target": "prepaid_converted",
+      "condition": null,
+      "rows": 3000,
+      "prevalence": 0.717,
+      "pr_auc": 0.7763639189829059,
+      "brier": 0.19844106631903544,
+      "ece": 0.015135514816388525
+    },
+    "prepaid_failure": {
+      "target": "prepaid_failed_delivery",
+      "condition": "prepaid_converted",
+      "rows": 2151,
+      "prevalence": 0.1678289167828917,
+      "pr_auc": 0.2817922642402929,
+      "brier": 0.1337251996068354,
+      "ece": 0.014902426934446874
+    }
+  },
+  "policies": {
+    "always_cod": {
+      "name": "Always COD",
+      "total_realized_contribution": 458347.8617760002,
+      "realized_contribution_per_order": 152.78262059200006,
+      "improvement_vs_always_cod_total": 0.0,
+      "action_distribution": {
+        "COD": 3000,
+        "OTP": 0,
+        "PREPAID": 0
+      },
+      "intervention_rate": 0.0,
+      "unnecessary_intervention_population_rate": 0.0,
+      "unnecessary_intervention_share_of_interventions": 0.0,
+      "false_positive_cost": 0.0,
+      "false_positive_orders": 0,
+      "otp_completion_rate_when_selected": null,
+      "prepaid_conversion_rate_when_selected": null
+    },
+    "always_otp": {
+      "name": "Always OTP",
+      "total_realized_contribution": 726915.5070140001,
+      "realized_contribution_per_order": 242.3051690046667,
+      "improvement_vs_always_cod_total": 268567.645238,
+      "action_distribution": {
+        "COD": 0,
+        "OTP": 3000,
+        "PREPAID": 0
+      },
+      "intervention_rate": 1.0,
+      "unnecessary_intervention_population_rate": 0.6133333333333333,
+      "unnecessary_intervention_share_of_interventions": 0.6133333333333333,
+      "false_positive_cost": 299100.25573800004,
+      "false_positive_orders": 1840,
+      "otp_completion_rate_when_selected": 0.7943333333333333,
+      "prepaid_conversion_rate_when_selected": null
+    },
+    "always_prepaid": {
+      "name": "Always prepaid",
+      "total_realized_contribution": 588477.005204,
+      "realized_contribution_per_order": 196.15900173466667,
+      "improvement_vs_always_cod_total": 130129.14342799992,
+      "action_distribution": {
+        "COD": 0,
+        "OTP": 0,
+        "PREPAID": 3000
+      },
+      "intervention_rate": 1.0,
+      "unnecessary_intervention_population_rate": 0.6133333333333333,
+      "unnecessary_intervention_share_of_interventions": 0.6133333333333333,
+      "false_positive_cost": 367907.9870200001,
+      "false_positive_orders": 1840,
+      "otp_completion_rate_when_selected": null,
+      "prepaid_conversion_rate_when_selected": 0.717
+    },
+    "risk_threshold": {
+      "name": "Validation-selected RTO threshold",
+      "total_realized_contribution": 726457.5008820002,
+      "realized_contribution_per_order": 242.15250029400008,
+      "improvement_vs_always_cod_total": 268109.639106,
+      "action_distribution": {
+        "COD": 25,
+        "OTP": 2975,
+        "PREPAID": 0
+      },
+      "intervention_rate": 0.9916666666666667,
+      "unnecessary_intervention_population_rate": 0.6076666666666667,
+      "unnecessary_intervention_share_of_interventions": 0.6127731092436974,
+      "false_positive_cost": 295927.300574,
+      "false_positive_orders": 1823,
+      "otp_completion_rate_when_selected": 0.7939495798319328,
+      "prepaid_conversion_rate_when_selected": null
+    },
+    "cod_sentinel": {
+      "name": "COD Sentinel",
+      "total_realized_contribution": 655475.6006400001,
+      "realized_contribution_per_order": 218.49186688000003,
+      "improvement_vs_always_cod_total": 197127.738864,
+      "action_distribution": {
+        "COD": 352,
+        "OTP": 1774,
+        "PREPAID": 874
+      },
+      "intervention_rate": 0.8826666666666667,
+      "unnecessary_intervention_population_rate": 0.5316666666666666,
+      "unnecessary_intervention_share_of_interventions": 0.6023413897280967,
+      "false_positive_cost": 250270.10375600006,
+      "false_positive_orders": 1595,
+      "otp_completion_rate_when_selected": 0.7925591882750845,
+      "prepaid_conversion_rate_when_selected": 0.7070938215102975,
+      "improvement_per_order_95pct_cluster_bootstrap": {
+        "low": 48.78474524144359,
+        "high": 82.74021134443632
+      },
+      "mean_selected_predicted_ev": 239.70760190327388,
+      "mean_realized_simulator_contribution": 218.49186688000003,
+      "best_simple_baseline": "always_otp",
+      "improvement_vs_best_simple_baseline_per_order": -23.813302124666677,
+      "improvement_vs_best_simple_95pct_cluster_bootstrap": {
+        "low": -36.63473191537124,
+        "high": -11.76573140386071
+      }
+    }
+  },
+  "clairvoyant_realized_hindsight_bound": {
+    "total_realized_contribution": 1154018.3448100004,
+    "realized_contribution_per_order": 384.6727816033335,
+    "action_distribution": {
+      "COD": 1855,
+      "OTP": 713,
+      "PREPAID": 432
+    }
+  },
+  "clairvoyant_hindsight_regret": {
+    "total": 498542.7441700001,
+    "mean_per_order": 166.18091472333336,
+    "median_per_order": 2.0,
+    "p95_per_order": 865.0858559999983
+  },
+  "bayes_oracle_expected_evaluation": {
+    "oracle_expected_contribution_per_order": 235.2735547724308,
+    "learned_policy_true_expected_contribution_per_order": 221.78750747092863,
+    "expected_regret_per_order": 13.486047301502186,
+    "total_expected_regret": 40458.141904506556,
+    "oracle_action_distribution": {
+      "COD": 285,
+      "OTP": 2324,
+      "PREPAID": 391
+    }
+  },
+  "sensitivity": {
+    "scope": "predicted-policy sensitivity; potential outcomes unchanged",
+    "scenarios": {
+      "prepaid_discount_rate": [
+        {
+          "value": 0.0,
+          "mean_selected_predicted_ev": 245.45491514903293,
+          "action_distribution": {
+            "COD": 259,
+            "OTP": 1352,
+            "PREPAID": 1389
+          }
+        },
+        {
+          "value": 0.02,
+          "mean_selected_predicted_ev": 239.70760190327388,
+          "action_distribution": {
+            "COD": 352,
+            "OTP": 1774,
+            "PREPAID": 874
+          }
+        },
+        {
+          "value": 0.05,
+          "mean_selected_predicted_ev": 236.36984579022894,
+          "action_distribution": {
+            "COD": 457,
+            "OTP": 2172,
+            "PREPAID": 371
+          }
+        },
+        {
+          "value": 0.1,
+          "mean_selected_predicted_ev": 235.19031278570174,
+          "action_distribution": {
+            "COD": 496,
+            "OTP": 2381,
+            "PREPAID": 123
+          }
+        }
+      ],
+      "reverse_shipping_cost": [
+        {
+          "value": 40.0,
+          "mean_selected_predicted_ev": 245.49799402874052,
+          "action_distribution": {
+            "COD": 428,
+            "OTP": 1804,
+            "PREPAID": 768
+          }
+        },
+        {
+          "value": 80.0,
+          "mean_selected_predicted_ev": 239.70760190327388,
+          "action_distribution": {
+            "COD": 352,
+            "OTP": 1774,
+            "PREPAID": 874
+          }
+        },
+        {
+          "value": 120.0,
+          "mean_selected_predicted_ev": 234.0839116545547,
+          "action_distribution": {
+            "COD": 310,
+            "OTP": 1735,
+            "PREPAID": 955
+          }
+        },
+        {
+          "value": 180.0,
+          "mean_selected_predicted_ev": 225.86676041667172,
+          "action_distribution": {
+            "COD": 259,
+            "OTP": 1683,
+            "PREPAID": 1058
+          }
+        }
+      ],
+      "inventory_damage_rate": [
+        {
+          "value": 0.0,
+          "mean_selected_predicted_ev": 262.48638555565964,
+          "action_distribution": {
+            "COD": 624,
+            "OTP": 1747,
+            "PREPAID": 629
+          }
+        },
+        {
+          "value": 0.1,
+          "mean_selected_predicted_ev": 243.26961130323912,
+          "action_distribution": {
+            "COD": 397,
+            "OTP": 1775,
+            "PREPAID": 828
+          }
+        },
+        {
+          "value": 0.25,
+          "mean_selected_predicted_ev": 218.1436511848223,
+          "action_distribution": {
+            "COD": 220,
+            "OTP": 1681,
+            "PREPAID": 1099
+          }
+        },
+        {
+          "value": 0.5,
+          "mean_selected_predicted_ev": 181.93199466466928,
+          "action_distribution": {
+            "COD": 67,
+            "OTP": 1501,
+            "PREPAID": 1432
+          }
+        }
+      ],
+      "damaged_inventory_recovery_rate": [
+        {
+          "value": 0.0,
+          "mean_selected_predicted_ev": 237.37894968738007,
+          "action_distribution": {
+            "COD": 334,
+            "OTP": 1774,
+            "PREPAID": 892
+          }
+        },
+        {
+          "value": 0.25,
+          "mean_selected_predicted_ev": 243.26961130323912,
+          "action_distribution": {
+            "COD": 397,
+            "OTP": 1775,
+            "PREPAID": 828
+          }
+        },
+        {
+          "value": 0.5,
+          "mean_selected_predicted_ev": 249.41288556313157,
+          "action_distribution": {
+            "COD": 459,
+            "OTP": 1779,
+            "PREPAID": 762
+          }
+        },
+        {
+          "value": 0.9,
+          "mean_selected_predicted_ev": 259.77479439720975,
+          "action_distribution": {
+            "COD": 585,
+            "OTP": 1758,
+            "PREPAID": 657
+          }
+        }
+      ],
+      "prepaid_conversion_multiplier": [
+        {
+          "value": 0.6,
+          "mean_selected_predicted_ev": 237.00464159645745,
+          "action_distribution": {
+            "COD": 472,
+            "OTP": 2122,
+            "PREPAID": 406
+          }
+        },
+        {
+          "value": 0.8,
+          "mean_selected_predicted_ev": 237.23443471602909,
+          "action_distribution": {
+            "COD": 449,
+            "OTP": 2042,
+            "PREPAID": 509
+          }
+        },
+        {
+          "value": 1.0,
+          "mean_selected_predicted_ev": 239.70760190327388,
+          "action_distribution": {
+            "COD": 352,
+            "OTP": 1774,
+            "PREPAID": 874
+          }
+        },
+        {
+          "value": 1.2,
+          "mean_selected_predicted_ev": 254.56017559079197,
+          "action_distribution": {
+            "COD": 134,
+            "OTP": 1118,
+            "PREPAID": 1748
+          }
+        }
+      ],
+      "otp_completion_multiplier": [
+        {
+          "value": 0.6,
+          "mean_selected_predicted_ev": 215.79433105668636,
+          "action_distribution": {
+            "COD": 649,
+            "OTP": 454,
+            "PREPAID": 1897
+          }
+        },
+        {
+          "value": 0.8,
+          "mean_selected_predicted_ev": 220.31718783689624,
+          "action_distribution": {
+            "COD": 582,
+            "OTP": 890,
+            "PREPAID": 1528
+          }
+        },
+        {
+          "value": 1.0,
+          "mean_selected_predicted_ev": 239.70760190327388,
+          "action_distribution": {
+            "COD": 352,
+            "OTP": 1774,
+            "PREPAID": 874
+          }
+        },
+        {
+          "value": 1.2,
+          "mean_selected_predicted_ev": 275.60480595660795,
+          "action_distribution": {
+            "COD": 118,
+            "OTP": 2310,
+            "PREPAID": 572
+          }
+        }
+      ]
+    }
+  }
+}

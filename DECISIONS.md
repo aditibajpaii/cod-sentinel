@@ -66,3 +66,53 @@ p_break_even = S / (S - F)
 The implementation computes `S` and `F` through the shared engine. It does not
 maintain a second handwritten formula. A non-positive result means delivered
 COD is already non-profitable under the configured assumptions.
+
+## ADR-006: Train only outcome probabilities required by economics
+
+**Status:** Accepted
+
+The bundle contains COD RTO, OTP completion, OTP RTO after completion, prepaid
+conversion, and prepaid failed-delivery models. Logistic regression and
+histogram gradient boosting are compared per target; calibration and estimator
+choices are selected by validation Brier score.
+
+These are supervised models trained on simulator potential-outcome labels.
+They are not uplift or causal models. Real deployment would require logged or
+randomized intervention data.
+
+## ADR-007: Keep test outcomes outside training and selection
+
+**Status:** Accepted
+
+Training filters to train, calibration, and validation IDs before joining
+labels. Calibration candidates are fit on calibration and selected on
+validation. Classification and simple-policy thresholds are also selected on
+validation. Only the frozen evaluator maps test actions to test potential
+outcomes.
+
+## ADR-008: Evaluate realized branches, not predicted EV
+
+**Status:** Accepted
+
+Predicted EV chooses an action. Evaluation then looks up only the held-out
+potential outcome for that selected action and prices it through
+`realized_contribution`. The simulator oracle separately chooses the best
+realized branch and is labeled an unavailable upper bound.
+
+## ADR-009: Include baselines that can disprove the system
+
+**Status:** Accepted
+
+Evaluation includes always COD, always OTP, always prepaid, and a
+validation-selected RTO threshold. The final v1 result is adverse: the simple
+OTP threshold beats COD Sentinel. This is retained because omitting a strong
+baseline would make the evidence misleading.
+
+## ADR-010: Defer uncertainty and external integrations
+
+**Status:** Accepted
+
+No bootstrap probability interval, LLM address parser, Razorpay API, database,
+or webhook is part of the core. Customer-cluster bootstrap is used only for an
+evaluation interval on mean contribution improvement. Runtime uncertainty and
+external integrations require separate evidence and failure-mode tests.

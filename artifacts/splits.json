@@ -1,0 +1,33 @@
+{
+  "total_rows": 20000,
+  "splits": {
+    "train": {
+      "count": 13000,
+      "first_order_id": "ORDER-000000",
+      "last_order_id": "ORDER-012999",
+      "start": "2025-01-01T00:04:25",
+      "end": "2025-08-23T16:55:27"
+    },
+    "calibration": {
+      "count": 2000,
+      "first_order_id": "ORDER-013000",
+      "last_order_id": "ORDER-014999",
+      "start": "2025-08-23T17:22:29",
+      "end": "2025-09-28T19:38:14"
+    },
+    "validation": {
+      "count": 2000,
+      "first_order_id": "ORDER-015000",
+      "last_order_id": "ORDER-016999",
+      "start": "2025-09-28T20:04:07",
+      "end": "2025-11-03T22:18:21"
+    },
+    "test": {
+      "count": 3000,
+      "first_order_id": "ORDER-017000",
+      "last_order_id": "ORDER-019999",
+      "start": "2025-11-03T22:42:20",
+      "end": "2025-12-28T02:14:01"
+    }
+  }
+}

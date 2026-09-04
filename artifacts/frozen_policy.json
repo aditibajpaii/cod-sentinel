@@ -1,0 +1,40 @@
+{
+  "policy_version": "economic-policy-v1",
+  "model_version": "outcome-models-v2",
+  "economics_version": "economics-v1",
+  "dataset_version": "synthetic-orders-v2",
+  "dgp_version": "synthetic-dgp-v2",
+  "config_version": "merchant-economics-v1",
+  "risk_classification_threshold": 0.25,
+  "threshold_policy_rto_cutoff": 0.15,
+  "selection_split": "validation",
+  "validation_f1": 0.5857260049220673,
+  "validation_threshold_policy_contribution_per_order": 204.32495337800006,
+  "merchant_economics": {
+    "gross_margin_rate": 0.3,
+    "forward_shipping_cost": 60.0,
+    "reverse_shipping_cost": 80.0,
+    "packaging_cost": 15.0,
+    "other_fulfillment_cost": 5.0,
+    "cod_fee_rate": 0.015,
+    "cod_fee_flat": 5.0,
+    "otp_verification_cost": 2.0,
+    "prepaid_fee_rate": 0.02,
+    "prepaid_fee_flat": 0.0,
+    "prepaid_discount_rate": 0.02,
+    "prepaid_refund_cost": 5.0,
+    "inventory_damage_rate": 0.12,
+    "damaged_inventory_recovery_rate": 0.1
+  },
+  "tie_break_order": [
+    "COD",
+    "OTP",
+    "PREPAID"
+  ],
+  "artifact_hashes": {
+    "observable": "abcbeca33cf5c1f926da9c866537e20e1a58d0a91feea99ff7c6ca288746a487",
+    "oracle": "917ab16c3532d15ada3bdf9bdb21d0b6b146db3f7566c440af114d562b40d59f",
+    "model_bundle": "fac4fbd5a60144845009f972e93399b1c9400ed6c8c8f9d2016672792ca36241",
+    "policy_config": "89379a6c75188eb67056f2b4170954e16aab2d0a36408ea33de9b3510521fc8a"
+  }
+}

@@ -1,6 +1,6 @@
 # Architecture
 
-The scaffold establishes two trust domains that later milestones must preserve.
+COD Sentinel has separate runtime and evaluation trust domains.
 
 ## Runtime path
 
@@ -67,10 +67,49 @@ produce a runtime feature, model input, expected value, or action.
 
 - `configuration.py` owns deterministic build settings and split sizes.
 - `versioning.py` owns explicit artifact and pipeline version identifiers.
-- Future economics, simulation, models, policy, and evaluation modules live in
-  the same installable package while retaining the runtime/evaluation boundary.
-- `app.py` will be a read-mostly adapter over frozen package artifacts; it will
-  not own business logic or training.
+- `generator.py` creates observable orders and a physically separate oracle
+  outcome artifact.
+- `features.py` owns prior-only history construction and the runtime feature
+  allowlist.
+- `leakage.py` recomputes histories, verifies artifact separation, and runs the
+  shuffled-label sanity gate.
+- `models.py` trains five supervised simulator outcome models using only train,
+  calibration, and validation rows.
+- `calibration.py` fits calibration candidates on calibration and chooses on
+  validation.
+- `economics.py` is the sole source of realized and expected contribution.
+- `policy.py` consumes only calibrated runtime probabilities and merchant
+  economics. It cannot import simulator potential outcomes.
+- `evaluation.py` is the only layer that maps selected actions to held-out
+  potential outcomes.
+- `app.py` is a read-mostly adapter over frozen package artifacts; it owns no
+  training or business logic.
+
+## Artifact flow
+
+```text
+make generate
+  ├─ artifacts/observable_orders.csv
+  └─ artifacts/oracle_outcomes.csv
+
+make leakage
+  └─ artifacts/leakage_report.json
+
+make train
+  ├─ artifacts/model_bundle.joblib
+  ├─ artifacts/model_bundle.joblib.sha256
+  └─ artifacts/model_metadata.json
+
+make freeze
+  └─ artifacts/frozen_policy.json
+
+make evaluate
+  └─ results/metrics.json
+```
+
+Generated raw data and model binaries are ignored because they are reproduced
+from a frozen seed and commands. Small frozen metadata and final metrics are
+committed as submission evidence.
 
 No database, API service, authentication layer, container, or external
 integration is part of the core architecture.

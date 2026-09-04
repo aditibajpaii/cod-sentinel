@@ -1,0 +1,39 @@
+{
+  "passed": true,
+  "gates": {
+    "feature_allowlist_and_provenance": "passed",
+    "oracle_physical_separation": "passed",
+    "prior_history_recomputation": "passed",
+    "shuffled_label_sanity": "passed"
+  },
+  "shuffled_label_validation_roc_auc": 0.5095395108970346,
+  "oracle_denylist": [
+    "archetype",
+    "cod_rto",
+    "latent_abuse",
+    "latent_address_quality",
+    "latent_availability",
+    "latent_intent",
+    "latent_price_sensitivity",
+    "logged_action",
+    "logged_converted",
+    "logged_delivered",
+    "logged_rto",
+    "oracle_p_cod_rto",
+    "oracle_p_otp_completion",
+    "oracle_p_otp_rto",
+    "oracle_p_prepaid_conversion",
+    "oracle_p_prepaid_failure",
+    "otp_completed",
+    "otp_rto_if_completed",
+    "outcome_observed_at",
+    "prepaid_converted",
+    "prepaid_failed_delivery",
+    "realized_contribution"
+  ],
+  "artifact_hashes": {
+    "observable": "abcbeca33cf5c1f926da9c866537e20e1a58d0a91feea99ff7c6ca288746a487",
+    "oracle": "917ab16c3532d15ada3bdf9bdb21d0b6b146db3f7566c440af114d562b40d59f",
+    "split_manifest": "e6b16afe16ba8bbcce77a6dffe815c2d4481f353c494e1e0ebd2473eef5d73ca"
+  }
+}

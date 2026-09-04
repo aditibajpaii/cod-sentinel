@@ -1,0 +1,116 @@
+{
+  "model_version": "outcome-models-v2",
+  "calibration_version": "probability-calibration-v1",
+  "dataset_version": "synthetic-orders-v2",
+  "feature_version": "runtime-features-v2",
+  "random_seed": 42,
+  "runtime_features": [
+    "category",
+    "pincode",
+    "order_value",
+    "order_hour",
+    "day_of_week",
+    "month",
+    "is_weekend",
+    "festival_period",
+    "phone_verified",
+    "address_quality_signal",
+    "customer_prior_orders",
+    "customer_prior_rto_rate",
+    "customer_prior_delivery_rate",
+    "customer_prior_prepaid_attempts",
+    "customer_prior_prepaid_success_rate",
+    "customer_order_value_ratio",
+    "pincode_prior_orders",
+    "pincode_prior_rto_rate"
+  ],
+  "selection_split": "validation",
+  "training_splits_used": [
+    "calibration",
+    "train",
+    "validation"
+  ],
+  "test_split_accessed": false,
+  "models": {
+    "cod_rto": {
+      "target_column": "cod_rto",
+      "estimator": "logistic_regression",
+      "calibration": "identity",
+      "validation_metrics": {
+        "brier": 0.22902358103978276,
+        "pr_auc": 0.5532867519369551,
+        "ece": 0.054811436500548615,
+        "calibration_candidates_brier": {
+          "identity": 0.22902358103978276,
+          "sigmoid": 0.23027215382032767,
+          "isotonic": 0.23093149517695594
+        }
+      },
+      "training_condition": null
+    },
+    "otp_completion": {
+      "target_column": "otp_completed",
+      "estimator": "logistic_regression",
+      "calibration": "sigmoid",
+      "validation_metrics": {
+        "brier": 0.16535766569615032,
+        "pr_auc": 0.8286882758934905,
+        "ece": 0.005122013894094484,
+        "calibration_candidates_brier": {
+          "identity": 0.16690823662756407,
+          "sigmoid": 0.16535766569615032,
+          "isotonic": 0.16675260270083314
+        }
+      },
+      "training_condition": null
+    },
+    "otp_rto": {
+      "target_column": "otp_rto_if_completed",
+      "estimator": "hist_gradient_boosting",
+      "calibration": "identity",
+      "validation_metrics": {
+        "brier": 0.17087753698594568,
+        "pr_auc": 0.32068796274651057,
+        "ece": 0.0345545111485929,
+        "calibration_candidates_brier": {
+          "identity": 0.17087753698594568,
+          "sigmoid": 0.17256178538911285,
+          "isotonic": 0.17340162484168087
+        }
+      },
+      "training_condition": "otp_completed"
+    },
+    "prepaid_conversion": {
+      "target_column": "prepaid_converted",
+      "estimator": "hist_gradient_boosting",
+      "calibration": "identity",
+      "validation_metrics": {
+        "brier": 0.20825611353511705,
+        "pr_auc": 0.7574162209698952,
+        "ece": 0.024053121203194746,
+        "calibration_candidates_brier": {
+          "identity": 0.20825611353511705,
+          "sigmoid": 0.21058806017842863,
+          "isotonic": 0.21008933776398367
+        }
+      },
+      "training_condition": null
+    },
+    "prepaid_failure": {
+      "target_column": "prepaid_failed_delivery",
+      "estimator": "logistic_regression",
+      "calibration": "identity",
+      "validation_metrics": {
+        "brier": 0.14748185573136602,
+        "pr_auc": 0.3718440367279873,
+        "ece": 0.03134400295290726,
+        "calibration_candidates_brier": {
+          "identity": 0.14748185573136602,
+          "sigmoid": 0.15098794275436747,
+          "isotonic": 0.14908459559489576
+        }
+      },
+      "training_condition": "prepaid_converted"
+    }
+  }
+}

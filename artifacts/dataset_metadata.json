@@ -1,0 +1,26 @@
+{
+  "dataset_version": "synthetic-orders-v2",
+  "dgp_version": "synthetic-dgp-v2",
+  "random_seed": 42,
+  "dataset_size": 20000,
+  "split_sizes": {
+    "train": 13000,
+    "calibration": 2000,
+    "validation": 2000,
+    "test": 3000
+  },
+  "archetypes": [
+    "customer_refusal",
+    "unavailability",
+    "address_failure",
+    "serial_abuse",
+    "legitimate_high_risk_looking"
+  ],
+  "rates": {
+    "cod_rto": 0.3503,
+    "otp_completion": 0.7903,
+    "otp_rto_if_completed": 0.1744906997342781,
+    "prepaid_conversion": 0.71835,
+    "prepaid_failure_if_converted": 0.1627340432936591
+  }
+}

@@ -12,5 +12,14 @@ dist/
 # Generated locally; selected frozen artifacts may be force-added later.
 artifacts/*
 !artifacts/.gitkeep
+!artifacts/dataset_metadata.json
+!artifacts/frozen_policy.json
+!artifacts/leakage_report.json
+!artifacts/model_bundle.joblib
+!artifacts/model_bundle.joblib.sha256
+!artifacts/model_metadata.json
+!artifacts/observable_orders.csv
+!artifacts/splits.json
 results/*
 !results/.gitkeep
+!results/metrics.json

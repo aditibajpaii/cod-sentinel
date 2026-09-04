@@ -3,6 +3,13 @@
 Work is dependency-ordered. A milestone is complete only after its tests and
 smoke checks pass.
 
+## Status
+
+- Core milestones 1–8: implemented.
+- Submission documentation and red-team review: implemented.
+- Final frozen result: generated from corrected `synthetic-dgp-v2`.
+- Stretch integrations: intentionally deferred.
+
 ## 1. Scaffold
 
 - Establish an installable Python package.
@@ -67,3 +74,5 @@ smoke checks pass.
 
 Only after the core is submission-ready: address intelligence, audit JSONL,
 replay, ensemble dispersion, or credential-safe Razorpay test-mode integration.
+
+No stretch feature is required by, or currently coupled to, the core pipeline.
