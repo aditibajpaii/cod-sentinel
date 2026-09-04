@@ -24,6 +24,16 @@ NUMERIC_FEATURES = (
     "pincode_prior_rto_rate",
 )
 RUNTIME_FEATURES = CATEGORICAL_FEATURES + NUMERIC_FEATURES
+HISTORY_FEATURES = (
+    "customer_prior_orders",
+    "customer_prior_rto_rate",
+    "customer_prior_delivery_rate",
+    "customer_prior_prepaid_attempts",
+    "customer_prior_prepaid_success_rate",
+    "customer_order_value_ratio",
+    "pincode_prior_orders",
+    "pincode_prior_rto_rate",
+)
 
 ORACLE_DENYLIST = frozenset(
     {

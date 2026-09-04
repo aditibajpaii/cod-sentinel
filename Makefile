@@ -1,4 +1,4 @@
-.PHONY: install test smoke generate train evaluate app
+.PHONY: install test smoke generate leakage train evaluate app
 
 PYTHON ?= python3
 
@@ -13,6 +13,9 @@ smoke:
 
 generate:
 	$(PYTHON) -m cod_sentinel.generator
+
+leakage:
+	$(PYTHON) -m cod_sentinel.leakage
 
 train evaluate app:
 	@echo "$@ is intentionally unavailable until its implementation milestone."
