@@ -3,13 +3,14 @@
 import hashlib
 import json
 from dataclasses import asdict, dataclass
+from math import isfinite
 from typing import Mapping
 
 import pandas as pd
 
 from cod_sentinel.configuration import PolicySettings
 from cod_sentinel.economics import expected_contribution
-from cod_sentinel.features import RUNTIME_FEATURES
+from cod_sentinel.features import CATEGORICAL_FEATURES, NUMERIC_FEATURES
 from cod_sentinel.models import ModelBundle
 from cod_sentinel.schemas import Action, ActionProbabilities, OrderEconomics
 from cod_sentinel.versioning import (
@@ -67,6 +68,36 @@ def _stable_id(payload: Mapping[str, object]) -> str:
     return hashlib.sha256(encoded).hexdigest()[:20]
 
 
+def _valid_order_id(value: object) -> bool:
+    if not pd.api.types.is_scalar(value):
+        return False
+    try:
+        if bool(pd.isna(value)):
+            return False
+    except (TypeError, ValueError):
+        return False
+    return bool(str(value).strip())
+
+
+def _runtime_row_is_valid(order: Mapping[str, object]) -> bool:
+    for name in CATEGORICAL_FEATURES:
+        value = order.get(name)
+        if not pd.api.types.is_scalar(value) or not isinstance(value, str):
+            return False
+        if not value.strip():
+            return False
+    for name in NUMERIC_FEATURES:
+        value = order.get(name)
+        if not pd.api.types.is_scalar(value) or isinstance(value, (str, bytes)):
+            return False
+        try:
+            if not isfinite(float(value)):
+                return False
+        except (TypeError, ValueError):
+            return False
+    return True
+
+
 def review_decision(
     order_id: object,
     reason_code: str,
@@ -74,7 +105,7 @@ def review_decision(
 ) -> Decision:
     """Return a deterministic non-economic REVIEW fallback."""
 
-    normalized_order_id = str(order_id) if order_id is not None else "UNKNOWN"
+    normalized_order_id = str(order_id) if _valid_order_id(order_id) else "UNKNOWN"
     payload = {
         "order_id": normalized_order_id,
         "selected_action": REVIEW,
@@ -103,6 +134,8 @@ def decide_from_probabilities(
 ) -> Decision:
     """Choose the highest-EV economic action from validated probabilities."""
 
+    if not _valid_order_id(order_id):
+        return review_decision(order_id, "MISSING_ORDER_ID", settings)
     try:
         probabilities = {
             name: float(probability_values[name])
@@ -187,7 +220,7 @@ class DecisionEngine:
 
     def decide(self, order: Mapping[str, object]) -> Decision:
         order_id = order.get("order_id")
-        if order_id is None or not str(order_id).strip():
+        if not _valid_order_id(order_id):
             return review_decision(
                 order_id,
                 "MISSING_ORDER_ID",
@@ -199,10 +232,7 @@ class DecisionEngine:
                 "MODEL_ARTIFACT_UNAVAILABLE",
                 self.settings,
             )
-        if any(
-            name not in order or order[name] is None or bool(pd.isna(order[name]))
-            for name in RUNTIME_FEATURES
-        ):
+        if not _runtime_row_is_valid(order):
             return review_decision(
                 order_id,
                 "SCHEMA_VALIDATION_FAILED",

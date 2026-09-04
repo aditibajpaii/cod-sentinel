@@ -37,6 +37,20 @@ def test_orders_are_chronological_and_unique(synthetic_world) -> None:
     assert observable["order_id"].tolist() == oracle["order_id"].tolist()
 
 
+def test_outcomes_are_observed_after_order_time(synthetic_world) -> None:
+    observable, oracle, _ = synthetic_world
+    timing = observable[["order_id", "ordered_at"]].merge(
+        oracle[["order_id", "outcome_observed_at"]],
+        on="order_id",
+        validate="one_to_one",
+    )
+
+    assert (
+        pd.to_datetime(timing["outcome_observed_at"])
+        >= pd.to_datetime(timing["ordered_at"])
+    ).all()
+
+
 def test_potential_outcomes_and_probabilities_are_valid(synthetic_world) -> None:
     _, oracle, _ = synthetic_world
 

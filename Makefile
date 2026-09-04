@@ -1,4 +1,4 @@
-.PHONY: install test smoke generate leakage train evaluate app
+.PHONY: install test smoke pipeline generate leakage train freeze evaluate app
 
 PYTHON ?= python3
 
@@ -11,6 +11,13 @@ test:
 smoke:
 	$(PYTHON) -c "import cod_sentinel; print(cod_sentinel.__version__)"
 
+pipeline:
+	$(MAKE) generate PYTHON=$(PYTHON)
+	$(MAKE) leakage PYTHON=$(PYTHON)
+	$(MAKE) train PYTHON=$(PYTHON)
+	$(MAKE) freeze PYTHON=$(PYTHON)
+	$(MAKE) evaluate PYTHON=$(PYTHON)
+
 generate:
 	$(PYTHON) -m cod_sentinel.generator
 
@@ -19,6 +26,9 @@ leakage:
 
 train:
 	$(PYTHON) -c "from cod_sentinel.models import main; main()"
+
+freeze:
+	$(PYTHON) -c "from cod_sentinel.evaluation import freeze_main; freeze_main()"
 
 evaluate:
 	$(PYTHON) -c "from cod_sentinel.evaluation import main; main()"

@@ -265,6 +265,30 @@ def generate_synthetic_world(
         prepaid_converted,
         prepaid_failed,
     )
+    quick_resolution_minutes = rng.integers(5, 121, size=config.dataset_size)
+    delivered_resolution_minutes = rng.integers(
+        2 * 24 * 60,
+        7 * 24 * 60 + 1,
+        size=config.dataset_size,
+    )
+    rto_resolution_minutes = rng.integers(
+        5 * 24 * 60,
+        12 * 24 * 60 + 1,
+        size=config.dataset_size,
+    )
+    resolution_minutes = np.where(
+        ~logged_converted,
+        quick_resolution_minutes,
+        np.where(
+            logged_rto,
+            rto_resolution_minutes,
+            delivered_resolution_minutes,
+        ),
+    )
+    outcome_observed_at = ordered_at + pd.to_timedelta(
+        resolution_minutes,
+        unit="m",
+    )
 
     raw = pd.DataFrame(
         {
@@ -283,6 +307,7 @@ def generate_synthetic_world(
             "festival_period": festival,
             "phone_verified": phone_verified.astype(int),
             "address_quality_signal": np.round(address_quality_signal, 6),
+            "outcome_observed_at": outcome_observed_at,
             "logged_action": logged_action,
             "logged_converted": logged_converted.astype(int),
             "logged_delivered": logged_delivered.astype(int),
@@ -297,6 +322,7 @@ def generate_synthetic_world(
         "logged_converted",
         "logged_delivered",
         "logged_rto",
+        "outcome_observed_at",
     }
     observable = with_splits.drop(columns=sorted(internal_columns))
 
@@ -326,6 +352,7 @@ def generate_synthetic_world(
             "logged_converted": logged_converted.astype(int),
             "logged_delivered": logged_delivered.astype(int),
             "logged_rto": logged_rto.astype(int),
+            "outcome_observed_at": outcome_observed_at,
         }
     )
     oracle = observable[["order_id"]].merge(

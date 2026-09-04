@@ -145,6 +145,23 @@ def test_missing_model_artifact_falls_back_to_review(
     assert decision.reason_codes == ("MODEL_ARTIFACT_UNAVAILABLE",)
 
 
+@pytest.mark.parametrize("order_id", [None, "", "   ", float("nan"), ["bad"]])
+def test_invalid_order_id_falls_back_to_review(
+    order_id,
+    settings: PolicySettings,
+) -> None:
+    decision = decide_from_probabilities(
+        order_id=order_id,
+        order_value=1_000.0,
+        probability_values=_probabilities(),
+        settings=settings,
+    )
+
+    assert decision.selected_action == REVIEW
+    assert decision.order_id == "UNKNOWN"
+    assert decision.reason_codes == ("MISSING_ORDER_ID",)
+
+
 class _BrokenBundle:
     def predict_all(self, features):
         raise ValueError("corrupt artifact")
@@ -164,6 +181,23 @@ def test_corrupt_model_artifact_falls_back_to_review(
 
     assert decision.selected_action == REVIEW
     assert decision.reason_codes == ("MODEL_INFERENCE_FAILED",)
+
+
+def test_container_runtime_feature_falls_back_to_review(
+    settings: PolicySettings,
+    synthetic_world,
+) -> None:
+    observable, _, _ = synthetic_world
+    row = observable.iloc[0].to_dict()
+    row["order_value"] = [1_000.0]
+
+    decision = DecisionEngine(
+        bundle=_BrokenBundle(),
+        settings=settings,
+    ).decide(row)
+
+    assert decision.selected_action == REVIEW
+    assert decision.reason_codes == ("SCHEMA_VALIDATION_FAILED",)
 
 
 def test_default_policy_config_loads_complete_tie_break() -> None:

@@ -22,7 +22,12 @@ from cod_sentinel.features import (
     add_prior_history_features,
     select_runtime_features,
 )
-from cod_sentinel.generator import OBSERVABLE_PATH, ORACLE_PATH
+from cod_sentinel.generator import (
+    OBSERVABLE_PATH,
+    ORACLE_PATH,
+    SPLIT_MANIFEST_PATH,
+)
+from cod_sentinel.integrity import sha256_file, validate_split_manifest
 
 LEAKAGE_REPORT_PATH = ARTIFACTS_DIR / "leakage_report.json"
 
@@ -70,6 +75,7 @@ def validate_prior_history(
         "logged_converted",
         "logged_delivered",
         "logged_rto",
+        "outcome_observed_at",
     ]
     raw = observable.drop(columns=list(HISTORY_FEATURES) + ["split"]).merge(
         oracle[logged_columns],
@@ -151,6 +157,7 @@ def shuffled_label_auc(
 def run_leakage_gates(
     observable_path: Path = OBSERVABLE_PATH,
     oracle_path: Path = ORACLE_PATH,
+    split_manifest_path: Path = SPLIT_MANIFEST_PATH,
     report_path: Path = LEAKAGE_REPORT_PATH,
 ) -> dict[str, object]:
     """Run every leakage gate and persist a machine-readable report."""
@@ -162,6 +169,7 @@ def run_leakage_gates(
 
     validate_feature_contract(observable)
     validate_physical_separation(observable, oracle)
+    validate_split_manifest(observable, split_manifest_path, DEFAULT_CONFIG)
     validate_prior_history(observable, oracle)
     shuffled_auc = shuffled_label_auc(
         observable,
@@ -184,6 +192,11 @@ def run_leakage_gates(
         },
         "shuffled_label_validation_roc_auc": shuffled_auc,
         "oracle_denylist": sorted(ORACLE_DENYLIST),
+        "artifact_hashes": {
+            "observable": sha256_file(observable_path),
+            "oracle": sha256_file(oracle_path),
+            "split_manifest": sha256_file(split_manifest_path),
+        },
     }
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

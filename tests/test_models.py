@@ -36,6 +36,11 @@ def test_training_produces_every_required_outcome_model(small_bundle) -> None:
             "logistic_regression",
         }
         assert model.calibration_method in {"identity", "sigmoid", "isotonic"}
+    assert bundle.models["otp_rto"].training_condition == "otp_completed"
+    assert (
+        bundle.models["prepaid_failure"].training_condition
+        == "prepaid_converted"
+    )
 
 
 def test_bundle_predicts_valid_probabilities_for_unknown_categories(
@@ -89,3 +94,28 @@ def test_model_bundle_reloads_in_fresh_process(small_bundle, tmp_path) -> None:
     )
 
     assert completed.returncode == 0, completed.stderr
+
+
+def test_model_bundle_rejects_stale_version(small_bundle, tmp_path) -> None:
+    bundle, _ = small_bundle
+    path = tmp_path / "model_bundle.joblib"
+    original = bundle.metadata["model_version"]
+    bundle.metadata["model_version"] = "obsolete-model-v0"
+    bundle.save(path)
+
+    with pytest.raises(ValueError, match="version mismatch"):
+        ModelBundle.load(path)
+
+    bundle.metadata["model_version"] = original
+
+
+def test_direct_module_training_is_rejected() -> None:
+    completed = subprocess.run(
+        [sys.executable, "-m", "cod_sentinel.models"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "Use `make train`" in completed.stderr

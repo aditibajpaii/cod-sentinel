@@ -1,5 +1,6 @@
 """Prior-only feature construction and runtime feature schema."""
 
+import heapq
 from dataclasses import dataclass
 
 import pandas as pd
@@ -54,6 +55,11 @@ ORACLE_DENYLIST = frozenset(
         "prepaid_converted",
         "prepaid_failed_delivery",
         "realized_contribution",
+        "outcome_observed_at",
+        "logged_action",
+        "logged_converted",
+        "logged_delivered",
+        "logged_rto",
     }
 )
 
@@ -84,6 +90,7 @@ _HISTORY_INPUT_COLUMNS = {
     "customer_id",
     "pincode",
     "order_value",
+    "outcome_observed_at",
     "logged_action",
     "logged_converted",
     "logged_delivered",
@@ -120,12 +127,35 @@ def add_prior_history_features(orders: pd.DataFrame) -> pd.DataFrame:
         ["ordered_at", "order_id"],
         kind="stable",
     ).reset_index(drop=True)
+    result["ordered_at"] = pd.to_datetime(result["ordered_at"], errors="raise")
+    result["outcome_observed_at"] = pd.to_datetime(
+        result["outcome_observed_at"],
+        errors="raise",
+    )
+    if result["ordered_at"].isna().any() or result["outcome_observed_at"].isna().any():
+        raise ValueError("Order and outcome timestamps must be complete.")
+    if (result["outcome_observed_at"] < result["ordered_at"]).any():
+        raise ValueError("An outcome cannot be observed before its order.")
+
     customer_stats: dict[str, _HistoryStats] = {}
     pincode_stats: dict[str, _HistoryStats] = {}
     feature_rows: list[dict[str, float | int]] = [{} for _ in range(len(result))]
+    pending: list[tuple[int, int, dict[str, object]]] = []
+    sequence = 0
 
-    for _, timestamp_rows in result.groupby("ordered_at", sort=True):
+    for ordered_at, timestamp_rows in result.groupby("ordered_at", sort=True):
         indices = list(timestamp_rows.index)
+        ordered_at_ns = pd.Timestamp(ordered_at).value
+
+        while pending and pending[0][0] < ordered_at_ns:
+            _, _, outcome = heapq.heappop(pending)
+            customer = customer_stats[str(outcome["customer_id"])]
+            pincode = pincode_stats[str(outcome["pincode"])]
+            customer.rtos += int(outcome["logged_rto"])
+            customer.deliveries += int(outcome["logged_delivered"])
+            if outcome["logged_action"] == "PREPAID":
+                customer.prepaid_successes += int(outcome["logged_converted"])
+            pincode.rtos += int(outcome["logged_rto"])
 
         for index in indices:
             row = result.loc[index]
@@ -161,15 +191,27 @@ def add_prior_history_features(orders: pd.DataFrame) -> pd.DataFrame:
             pincode = pincode_stats.setdefault(pincode_key, _HistoryStats())
 
             customer.orders += 1
-            customer.rtos += int(row["logged_rto"])
-            customer.deliveries += int(row["logged_delivered"])
             customer.order_value_sum += float(row["order_value"])
             if row["logged_action"] == "PREPAID":
                 customer.prepaid_attempts += 1
-                customer.prepaid_successes += int(row["logged_converted"])
 
             pincode.orders += 1
-            pincode.rtos += int(row["logged_rto"])
+            heapq.heappush(
+                pending,
+                (
+                    pd.Timestamp(row["outcome_observed_at"]).value,
+                    sequence,
+                    {
+                        "customer_id": customer_key,
+                        "pincode": pincode_key,
+                        "logged_action": row["logged_action"],
+                        "logged_converted": row["logged_converted"],
+                        "logged_delivered": row["logged_delivered"],
+                        "logged_rto": row["logged_rto"],
+                    },
+                ),
+            )
+            sequence += 1
 
     return pd.concat([result, pd.DataFrame(feature_rows)], axis=1)
 

@@ -18,6 +18,7 @@ def _raw_history_rows() -> pd.DataFrame:
                 "customer_id": "CUSTOMER-1",
                 "pincode": "ZONE-001",
                 "order_value": 500.0,
+                "outcome_observed_at": pd.Timestamp("2025-01-01T18:00:00"),
                 "logged_action": "COD",
                 "logged_converted": 1,
                 "logged_delivered": 0,
@@ -29,6 +30,7 @@ def _raw_history_rows() -> pd.DataFrame:
                 "customer_id": "CUSTOMER-1",
                 "pincode": "ZONE-001",
                 "order_value": 1_000.0,
+                "outcome_observed_at": pd.Timestamp("2025-01-04T10:00:00"),
                 "logged_action": "PREPAID",
                 "logged_converted": 1,
                 "logged_delivered": 1,
@@ -60,12 +62,24 @@ def test_same_timestamp_rows_do_not_observe_each_other() -> None:
     assert featured["pincode_prior_orders"].tolist() == [0, 0]
 
 
+def test_unresolved_prior_outcome_is_not_visible() -> None:
+    rows = _raw_history_rows()
+    rows.loc[0, "outcome_observed_at"] = pd.Timestamp("2025-01-03T10:00:00")
+
+    featured = add_prior_history_features(rows)
+    second = featured.loc[featured["order_id"] == "ORDER-2"].iloc[0]
+
+    assert second["customer_prior_orders"] == 1
+    assert second["customer_prior_rto_rate"] == 0.0
+
+
 def test_appending_future_rows_does_not_change_historical_features() -> None:
     original_rows = _raw_history_rows()
     original = add_prior_history_features(original_rows)
     future = original_rows.iloc[[1]].copy()
     future["order_id"] = "ORDER-3"
     future["ordered_at"] = pd.to_datetime(["2025-12-31T10:00:00"])
+    future["outcome_observed_at"] = pd.to_datetime(["2026-01-05T10:00:00"])
     expanded = add_prior_history_features(
         pd.concat([original_rows, future], ignore_index=True)
     )

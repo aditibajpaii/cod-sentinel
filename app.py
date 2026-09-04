@@ -10,22 +10,43 @@ import streamlit as st
 from cod_sentinel.configuration import load_policy_settings
 from cod_sentinel.economics import cod_break_even_rto_probability
 from cod_sentinel.evaluation import METRICS_PATH
+from cod_sentinel.features import RUNTIME_FEATURES
 from cod_sentinel.generator import OBSERVABLE_PATH
 from cod_sentinel.models import MODEL_BUNDLE_PATH, ModelBundle
 from cod_sentinel.policy import DecisionEngine
 from cod_sentinel.schemas import OrderEconomics
+from cod_sentinel.versioning import DATASET_VERSION, MODEL_VERSION, POLICY_VERSION
 
 
 def load_metrics(path: Path = METRICS_PATH) -> dict[str, object]:
     if not path.exists():
         raise FileNotFoundError(f"Evaluation metrics not found: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    for name in ("risk_model", "policies", "sensitivity", "versions"):
+        if name not in payload:
+            raise ValueError(f"Evaluation metrics missing section: {name}")
+    expected_versions = {
+        "dataset": DATASET_VERSION,
+        "model": MODEL_VERSION,
+        "policy": POLICY_VERSION,
+    }
+    for name, expected in expected_versions.items():
+        if payload["versions"].get(name) != expected:
+            raise ValueError(f"Evaluation metrics version mismatch for {name}.")
+    return payload
 
 
 def load_observable_orders(path: Path = OBSERVABLE_PATH) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Observable orders not found: {path}")
-    return pd.read_csv(path, parse_dates=["ordered_at"])
+    orders = pd.read_csv(path, parse_dates=["ordered_at"])
+    required = {"order_id", "ordered_at", "split", *RUNTIME_FEATURES}
+    missing = required.difference(orders.columns)
+    if missing:
+        raise ValueError(f"Observable artifact missing columns: {sorted(missing)}")
+    if orders.loc[orders["split"] == "test"].empty:
+        raise ValueError("Observable artifact contains no test orders.")
+    return orders
 
 
 @st.cache_resource
@@ -229,7 +250,7 @@ def main() -> None:
         engine = load_engine()
         metrics = cached_metrics()
         orders = cached_orders()
-    except (FileNotFoundError, ValueError, OSError, json.JSONDecodeError) as error:
+    except Exception as error:
         st.error(
             "Required frozen artifacts are unavailable. Run `make generate`, "
             "`make leakage`, `make train`, and `make evaluate`."

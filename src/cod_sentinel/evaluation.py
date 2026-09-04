@@ -17,15 +17,22 @@ from sklearn.metrics import (
 from cod_sentinel.calibration import expected_calibration_error
 from cod_sentinel.configuration import (
     ARTIFACTS_DIR,
+    DEFAULT_POLICY_CONFIG_PATH,
     RESULTS_DIR,
     PolicySettings,
     load_policy_settings,
 )
-from cod_sentinel.economics import realized_contribution
+from cod_sentinel.economics import expected_contribution, realized_contribution
 from cod_sentinel.generator import OBSERVABLE_PATH, ORACLE_PATH
+from cod_sentinel.integrity import sha256_file
 from cod_sentinel.models import MODEL_BUNDLE_PATH, ModelBundle
 from cod_sentinel.policy import REQUIRED_PROBABILITIES, decide_from_probabilities
-from cod_sentinel.schemas import Action, OrderEconomics, RealizedOutcome
+from cod_sentinel.schemas import (
+    Action,
+    ActionProbabilities,
+    OrderEconomics,
+    RealizedOutcome,
+)
 from cod_sentinel.versioning import (
     DATASET_VERSION,
     DGP_VERSION,
@@ -244,6 +251,79 @@ def _oracle_actions_and_values(
     return actions, np.asarray(values, dtype=float)
 
 
+def _true_expected_action_values(
+    observable: pd.DataFrame,
+    oracle: pd.DataFrame,
+    settings: PolicySettings,
+) -> dict[Action, np.ndarray]:
+    """Compute simulator-truth expected EVs without exposing them to policy."""
+
+    output = {action: np.empty(len(observable), dtype=float) for action in Action}
+    for index, row in observable.iterrows():
+        truth = oracle.iloc[index]
+        probabilities = {
+            Action.COD: ActionProbabilities.for_cod(
+                float(truth["oracle_p_cod_rto"])
+            ),
+            Action.OTP: ActionProbabilities(
+                conversion_probability=float(
+                    truth["oracle_p_otp_completion"]
+                ),
+                delivery_probability=1.0 - float(truth["oracle_p_otp_rto"]),
+            ),
+            Action.PREPAID: ActionProbabilities(
+                conversion_probability=float(
+                    truth["oracle_p_prepaid_conversion"]
+                ),
+                delivery_probability=(
+                    1.0 - float(truth["oracle_p_prepaid_failure"])
+                ),
+            ),
+        }
+        order = OrderEconomics(order_value=float(row["order_value"]))
+        for action in Action:
+            output[action][index] = expected_contribution(
+                action,
+                order,
+                settings.merchant_economics,
+                probabilities[action],
+            )
+    return output
+
+
+def _bayes_oracle_expected_evaluation(
+    learned_actions: list[Action],
+    observable: pd.DataFrame,
+    oracle: pd.DataFrame,
+    settings: PolicySettings,
+) -> dict[str, object]:
+    true_values = _true_expected_action_values(observable, oracle, settings)
+    tie_rank = {action: index for index, action in enumerate(settings.tie_break_order)}
+    oracle_actions: list[Action] = []
+    oracle_expected = np.empty(len(observable), dtype=float)
+    learned_expected = np.empty(len(observable), dtype=float)
+    for index, learned_action in enumerate(learned_actions):
+        selected = max(
+            Action,
+            key=lambda action: (true_values[action][index], -tie_rank[action]),
+        )
+        oracle_actions.append(selected)
+        oracle_expected[index] = true_values[selected][index]
+        learned_expected[index] = true_values[learned_action][index]
+    regret = oracle_expected - learned_expected
+    return {
+        "oracle_expected_contribution_per_order": float(oracle_expected.mean()),
+        "learned_policy_true_expected_contribution_per_order": float(
+            learned_expected.mean()
+        ),
+        "expected_regret_per_order": float(regret.mean()),
+        "total_expected_regret": float(regret.sum()),
+        "oracle_action_distribution": {
+            action.value: oracle_actions.count(action) for action in Action
+        },
+    }
+
+
 def customer_cluster_bootstrap_interval(
     customer_ids: np.ndarray,
     differences: np.ndarray,
@@ -301,7 +381,12 @@ def _policy_summary(
             for action in Action
         },
         "intervention_rate": float(intervened.mean()),
-        "unnecessary_intervention_rate": float(false_positive.mean()),
+        "unnecessary_intervention_population_rate": float(false_positive.mean()),
+        "unnecessary_intervention_share_of_interventions": (
+            float(false_positive.sum() / intervened.sum())
+            if intervened.any()
+            else 0.0
+        ),
         "false_positive_cost": float(false_positive_loss.sum()),
         "false_positive_orders": int(false_positive.sum()),
         "otp_completion_rate_when_selected": (
@@ -397,6 +482,41 @@ def _sensitivity_analysis(
     return output
 
 
+def _held_out_model_diagnostics(
+    predictions: dict[str, np.ndarray],
+    outcomes: pd.DataFrame,
+) -> dict[str, dict[str, float | int | str | None]]:
+    specifications = {
+        "cod_rto": ("cod_rto", None),
+        "otp_completion": ("otp_completed", None),
+        "otp_rto": ("otp_rto_if_completed", "otp_completed"),
+        "prepaid_conversion": ("prepaid_converted", None),
+        "prepaid_failure": (
+            "prepaid_failed_delivery",
+            "prepaid_converted",
+        ),
+    }
+    diagnostics: dict[str, dict[str, float | int | str | None]] = {}
+    for name, (target, condition) in specifications.items():
+        mask = (
+            outcomes[condition].to_numpy(dtype=bool)
+            if condition is not None
+            else np.ones(len(outcomes), dtype=bool)
+        )
+        labels = outcomes.loc[mask, target].to_numpy(dtype=int)
+        probabilities = predictions[name][mask]
+        diagnostics[name] = {
+            "target": target,
+            "condition": condition,
+            "rows": int(mask.sum()),
+            "prevalence": float(labels.mean()),
+            "pr_auc": float(average_precision_score(labels, probabilities)),
+            "brier": float(brier_score_loss(labels, probabilities)),
+            "ece": expected_calibration_error(labels, probabilities),
+        }
+    return diagnostics
+
+
 def evaluate_frozen_test(
     bundle: ModelBundle,
     observable: pd.DataFrame,
@@ -467,6 +587,22 @@ def evaluate_frozen_test(
         improvement,
         random_seed=42,
     )
+    simple_value_arrays = {
+        "always_cod": always_values,
+        "always_otp": always_otp_values,
+        "always_prepaid": always_prepaid_values,
+        "risk_threshold": threshold_values,
+    }
+    best_simple_name = max(
+        simple_value_arrays,
+        key=lambda name: float(simple_value_arrays[name].mean()),
+    )
+    best_simple_values = simple_value_arrays[best_simple_name]
+    best_simple_interval = customer_cluster_bootstrap_interval(
+        test["customer_id"].to_numpy(),
+        learned_values - best_simple_values,
+        random_seed=43,
+    )
 
     policies = {
         "always_cod": _policy_summary(
@@ -520,17 +656,17 @@ def evaluate_frozen_test(
     policies["cod_sentinel"]["mean_realized_simulator_contribution"] = float(
         learned_values.mean()
     )
-    simple_baselines = {
-        name: summary["realized_contribution_per_order"]
-        for name, summary in policies.items()
-        if name != "cod_sentinel"
-    }
-    best_simple_name = max(simple_baselines, key=simple_baselines.get)
-    best_simple_per_order = float(simple_baselines[best_simple_name])
+    best_simple_per_order = float(best_simple_values.mean())
     policies["cod_sentinel"]["best_simple_baseline"] = best_simple_name
     policies["cod_sentinel"]["improvement_vs_best_simple_baseline_per_order"] = (
         float(learned_values.mean()) - best_simple_per_order
     )
+    policies["cod_sentinel"][
+        "improvement_vs_best_simple_95pct_cluster_bootstrap"
+    ] = {
+        "low": best_simple_interval[0],
+        "high": best_simple_interval[1],
+    }
 
     regret = oracle_values - learned_values
     if (regret < -1e-9).any():
@@ -551,6 +687,14 @@ def evaluate_frozen_test(
                     "observed_rate": float(cod_labels[mask].mean()),
                 }
             )
+
+    model_diagnostics = _held_out_model_diagnostics(predictions, outcomes)
+    bayes_oracle = _bayes_oracle_expected_evaluation(
+        learned_actions,
+        test,
+        outcomes,
+        settings,
+    )
 
     return {
         "evidence_scope": "temporally held-out synthetic simulator",
@@ -578,20 +722,22 @@ def evaluate_frozen_test(
             ),
             "calibration_bins": calibration_bins,
         },
+        "outcome_model_diagnostics": model_diagnostics,
         "policies": policies,
-        "oracle_upper_bound": {
+        "clairvoyant_realized_hindsight_bound": {
             "total_realized_contribution": float(oracle_values.sum()),
             "realized_contribution_per_order": float(oracle_values.mean()),
             "action_distribution": {
                 action.value: oracle_actions.count(action) for action in Action
             },
         },
-        "oracle_regret": {
+        "clairvoyant_hindsight_regret": {
             "total": float(regret.sum()),
             "mean_per_order": float(regret.mean()),
             "median_per_order": float(np.median(regret)),
             "p95_per_order": float(np.quantile(regret, 0.95)),
         },
+        "bayes_oracle_expected_evaluation": bayes_oracle,
         "sensitivity": {
             "scope": "predicted-policy sensitivity; potential outcomes unchanged",
             "scenarios": _sensitivity_analysis(test, predictions, settings),
@@ -606,7 +752,54 @@ def evaluate_from_artifacts(
     frozen_path: Path = FROZEN_POLICY_PATH,
     metrics_path: Path = METRICS_PATH,
 ) -> dict[str, object]:
-    """Freeze on validation, then evaluate the unchanged policy on test."""
+    """Load an existing frozen policy, then evaluate it unchanged on test."""
+
+    observable = pd.read_csv(observable_path, parse_dates=["ordered_at"])
+    oracle = pd.read_csv(oracle_path)
+    bundle = ModelBundle.load(bundle_path)
+    settings = load_policy_settings()
+    if not frozen_path.exists():
+        raise FileNotFoundError("Freeze policy on validation before test evaluation.")
+    frozen = json.loads(frozen_path.read_text(encoding="utf-8"))
+    expected_versions = {
+        "policy_version": POLICY_VERSION,
+        "model_version": MODEL_VERSION,
+        "economics_version": ECONOMICS_VERSION,
+        "dataset_version": DATASET_VERSION,
+        "dgp_version": DGP_VERSION,
+        "config_version": settings.config_version,
+    }
+    for name, expected in expected_versions.items():
+        if frozen.get(name) != expected:
+            raise ValueError(f"Frozen policy version mismatch for {name}.")
+    expected_hashes = frozen.get("artifact_hashes", {})
+    for name, path in {
+        "observable": observable_path,
+        "oracle": oracle_path,
+        "model_bundle": bundle_path,
+        "policy_config": DEFAULT_POLICY_CONFIG_PATH,
+    }.items():
+        if expected_hashes.get(name) != sha256_file(path):
+            raise ValueError(f"Frozen policy artifact hash mismatch for {name}.")
+    metrics = evaluate_frozen_test(
+        bundle,
+        observable,
+        oracle,
+        settings,
+        frozen,
+    )
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+    return metrics
+
+
+def freeze_from_artifacts(
+    observable_path: Path = OBSERVABLE_PATH,
+    oracle_path: Path = ORACLE_PATH,
+    bundle_path: Path = MODEL_BUNDLE_PATH,
+    frozen_path: Path = FROZEN_POLICY_PATH,
+) -> dict[str, object]:
+    """Select policy settings on validation and bind artifact hashes."""
 
     observable = pd.read_csv(observable_path, parse_dates=["ordered_at"])
     oracle = pd.read_csv(oracle_path)
@@ -619,16 +812,24 @@ def evaluate_from_artifacts(
         settings,
         frozen_path,
     )
-    metrics = evaluate_frozen_test(
-        bundle,
-        observable,
-        oracle,
-        settings,
-        frozen,
+    frozen["artifact_hashes"] = {
+        "observable": sha256_file(observable_path),
+        "oracle": sha256_file(oracle_path),
+        "model_bundle": sha256_file(bundle_path),
+        "policy_config": sha256_file(DEFAULT_POLICY_CONFIG_PATH),
+    }
+    frozen_path.write_text(json.dumps(frozen, indent=2) + "\n", encoding="utf-8")
+    return frozen
+
+
+def freeze_main() -> None:
+    frozen = freeze_from_artifacts()
+    print(
+        "Frozen validation-selected policy; risk threshold="
+        f"{frozen['risk_classification_threshold']:.3f}; "
+        "economic threshold="
+        f"{frozen['threshold_policy_rto_cutoff']:.3f}"
     )
-    metrics_path.parent.mkdir(parents=True, exist_ok=True)
-    metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
-    return metrics
 
 
 def main() -> None:
