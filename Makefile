@@ -17,6 +17,9 @@ generate:
 leakage:
 	$(PYTHON) -m cod_sentinel.leakage
 
-train evaluate app:
+train:
+	$(PYTHON) -m cod_sentinel.models
+
+evaluate app:
 	@echo "$@ is intentionally unavailable until its implementation milestone."
 	@exit 2
