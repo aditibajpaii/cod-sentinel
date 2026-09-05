@@ -76,3 +76,13 @@ Only after the core is submission-ready: address intelligence, audit JSONL,
 replay, ensemble dispersion, or credential-safe Razorpay test-mode integration.
 
 No stretch feature is required by, or currently coupled to, the core pipeline.
+
+**Delivered:** audit JSONL and replay, as `ledger.py` and `make ledger-sample`.
+The ledger is a sink; no runtime decision depends on it and it is deliberately
+excluded from `make pipeline`.
+
+**Also delivered (stretch):** optional agent orchestrator overlay in
+`src/cod_sentinel/orchestrator/`, Streamlit tab 04, and `make agent-demo`.
+Live Anthropic, Google Geocoding, Twilio WhatsApp, and Razorpay test-mode
+credentials are required to run the agent path. The agent is not coupled to
+`make pipeline` or held-out evaluation metrics.

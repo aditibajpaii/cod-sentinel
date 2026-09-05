@@ -110,9 +110,23 @@ baseline would make the evidence misleading.
 
 ## ADR-010: Defer uncertainty and external integrations
 
+**Status:** Accepted (core); partially superseded for stretch agent work
+
+No bootstrap probability interval, database, or webhook is part of the core.
+Customer-cluster bootstrap is used only for an evaluation interval on mean
+contribution improvement.
+
+## ADR-011: Agent orchestrator as optional sink overlay
+
 **Status:** Accepted
 
-No bootstrap probability interval, address-parser integration, Razorpay API, database,
-or webhook is part of the core. Customer-cluster bootstrap is used only for an
-evaluation interval on mean contribution improvement. Runtime uncertainty and
-external integrations require separate evidence and failure-mode tests.
+The stretch agent in `src/cod_sentinel/orchestrator/` wraps — but does not
+replace — the deterministic `DecisionEngine`. Economics and margin bounds still
+flow through `economics.py`. The agent path:
+
+- calls live Anthropic, geocoding, Twilio, and Razorpay APIs
+- writes to a separate `agent_audit.jsonl` sink
+- is exposed only in Streamlit tab 04 and `make agent-demo`
+- does not alter frozen held-out evaluation or `make pipeline`
+
+Held-out metrics remain pipeline-based; the agent is a checkout-flow demo layer.

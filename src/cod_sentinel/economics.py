@@ -1,6 +1,6 @@
 """Shared state-transition economics for COD, OTP, and prepaid actions."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import isclose
 
 from cod_sentinel.schemas import (
@@ -199,3 +199,58 @@ def cod_break_even_rto_probability(
             "derive a break-even risk."
         )
     return delivered / (delivered - rto)
+
+
+def max_profitable_prepaid_discount(
+    order: OrderEconomics,
+    merchant: MerchantEconomics,
+    prepaid_probabilities: ActionProbabilities,
+    fallback_action: Action,
+    fallback_probabilities: ActionProbabilities,
+    *,
+    cap: float | None = None,
+    tolerance: float = 1e-6,
+) -> float:
+    """Return the largest prepaid discount rate that stays profitable.
+
+    The search finds the maximum ``d`` in ``[0, cap]`` where prepaid expected
+    contribution at discount ``d`` is at least the fallback action's expected
+    contribution and non-negative. ``cap`` defaults to
+    ``merchant.prepaid_discount_rate``.
+    """
+
+    cap_rate = merchant.prepaid_discount_rate if cap is None else cap
+    if not 0.0 <= cap_rate <= 1.0:
+        raise ValueError("cap must be between 0 and 1.")
+
+    fallback_ev = expected_contribution(
+        fallback_action,
+        order,
+        merchant,
+        fallback_probabilities,
+    )
+    floor_ev = max(fallback_ev, 0.0)
+
+    def prepaid_ev_at(discount_rate: float) -> float:
+        adjusted = replace(merchant, prepaid_discount_rate=discount_rate)
+        return expected_contribution(
+            Action.PREPAID,
+            order,
+            adjusted,
+            prepaid_probabilities,
+        )
+
+    if prepaid_ev_at(0.0) < floor_ev:
+        return 0.0
+
+    low = 0.0
+    high = cap_rate
+    best = 0.0
+    while high - low > tolerance:
+        mid = (low + high) / 2.0
+        if prepaid_ev_at(mid) >= floor_ev:
+            best = mid
+            low = mid
+        else:
+            high = mid
+    return best

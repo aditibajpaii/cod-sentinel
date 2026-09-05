@@ -11,6 +11,7 @@ license = { text = "MIT" }
 authors = [{ name = "COD Sentinel" }]
 dynamic = ["version"]
 dependencies = [
+  "altair>=5,<7",
   "joblib>=1.4,<2",
   "numpy>=2,<3",
   "pandas>=2.2,<3",
@@ -23,6 +24,14 @@ dev = [
   "hypothesis>=6.112,<7",
   "pytest>=8.3,<9",
 ]
+viz = [
+  "matplotlib>=3.9,<4",
+]
+agent = [
+  "anthropic>=0.49",
+  "httpx>=0.28",
+  "python-dotenv>=1.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -33,3 +42,6 @@ version = { attr = "cod_sentinel.versioning.PROJECT_VERSION" }
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+markers = [
+  "integration: live API smoke tests requiring credentials",
+]

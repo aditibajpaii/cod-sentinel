@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from html import escape
 from pathlib import Path
 
 import altair as alt
@@ -15,203 +16,283 @@ from cod_sentinel.economics import cod_break_even_rto_probability
 from cod_sentinel.evaluation import METRICS_PATH
 from cod_sentinel.features import RUNTIME_FEATURES
 from cod_sentinel.generator import OBSERVABLE_PATH
+from cod_sentinel.leakage import LEAKAGE_REPORT_PATH
 from cod_sentinel.models import MODEL_BUNDLE_PATH, ModelBundle
-from cod_sentinel.policy import DecisionEngine
+from cod_sentinel.policy import Decision, DecisionEngine
 from cod_sentinel.schemas import MerchantEconomics, OrderEconomics
 from cod_sentinel.versioning import DATASET_VERSION, MODEL_VERSION, POLICY_VERSION
 
-# Product palette: ink on paper, one money-green accent. No purple theme.
 _CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Manrope:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
-html, body, [class*="css"] {
-  font-family: 'Manrope', sans-serif;
+:root {
+  --canvas: #0a0a0b;
+  --panel: #12141a;
+  --hairline: #1c1e22;
+  --ink: #eceae4;
+  --muted: #8b8a84;
+  --dim: #5c5b56;
+  --accent: #c9a46a;
+  --allow: #6fbf86;
+  --verify: #d4b56a;
+  --fail: #c47a6a;
 }
 
-.stApp {
-  background:
-    radial-gradient(1200px 500px at 10% -10%, #e8f3ee 0%, transparent 55%),
-    linear-gradient(180deg, #f7f4ef 0%, #f3efe8 100%);
-  color: #1a1a17;
+html, body, [class*="css"], .stApp, .stMarkdown, p, span, label, div {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
 }
 
-[data-testid="stHeader"] {
-  background: transparent;
+.stApp { background: var(--canvas); color: var(--ink); }
+
+[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
+[data-testid="stStatusWidget"], [data-testid="stAppToolbar"],
+[data-testid="stSidebarCollapsedControl"], [data-testid="stHeaderActionElements"],
+.stHeadingActionElements, #MainMenu, footer, .stDeployButton,
+header[data-testid="stHeader"] {
+  display: none !important; visibility: hidden !important; height: 0 !important;
 }
 
 .block-container {
-  padding-top: 1.6rem !important;
-  padding-bottom: 3rem !important;
-  max-width: 1080px !important;
+  padding-top: 2.4rem !important;
+  padding-bottom: 3.6rem !important;
+  max-width: 1040px !important;
 }
+
+.brand-kicker, .section-kicker {
+  font-size: 0.68rem; font-weight: 500; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--accent); margin: 0 0 0.7rem 0;
+}
+.section-kicker { margin: 0.5rem 0 0.6rem 0; }
 
 .brand-mark {
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: clamp(2.4rem, 5vw, 3.4rem);
-  font-weight: 650;
-  letter-spacing: -0.03em;
-  line-height: 0.95;
-  color: #141411;
+  font-size: clamp(2.5rem, 5.5vw, 3.8rem); font-weight: 600;
+  letter-spacing: -0.04em; line-height: 0.94; color: var(--ink); margin: 0 0 0.75rem 0;
+}
+.brand-sub, .section-copy {
+  font-size: 0.98rem; line-height: 1.5; color: var(--muted);
+  max-width: 36rem; margin: 0 0 1.6rem 0;
+}
+.section-title {
+  font-size: clamp(1.45rem, 2.6vw, 1.85rem); font-weight: 600;
+  letter-spacing: -0.03em; margin: 0 0 0.45rem 0; color: var(--ink);
+}
+
+.hero-proof {
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  padding: 1.35rem 0 1.15rem;
   margin: 0 0 0.55rem 0;
 }
-
-.brand-sub {
-  font-size: 1.05rem;
-  line-height: 1.45;
-  color: #4a4a43;
-  max-width: 34rem;
-  margin: 0 0 1.4rem 0;
+.hero-proof-top {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: space-between; gap: 0.75rem 1.2rem;
 }
+.hero-proof-value {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: clamp(2.4rem, 5vw, 3.4rem); font-weight: 600;
+  letter-spacing: -0.04em; line-height: 1; color: var(--ink);
+}
+.hero-proof-caption {
+  margin-top: 0.45rem; font-size: 0.78rem; color: var(--dim);
+}
+.hero-baselines {
+  display: flex; flex-wrap: wrap; gap: 0.35rem 1.4rem;
+  margin: 0.85rem 0 1.6rem 0; font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.76rem; color: var(--muted);
+}
+.hero-baselines .sep { color: var(--dim); }
+
+.flow-rail {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.65rem;
+  padding: 0.65rem 0 1.5rem; margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 0.82rem; color: var(--muted);
+}
+.flow-step em {
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-style: normal;
+  font-weight: 600; color: var(--accent); letter-spacing: 0.06em; margin-right: 0.35rem;
+}
+.flow-arrow { color: var(--dim); font-family: "IBM Plex Mono", ui-monospace, monospace; }
 
 .pill {
-  display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #0f6b4c;
-  background: #dff3ea;
-  border: 1px solid #b9e2d1;
-  border-radius: 999px;
-  padding: 0.28rem 0.7rem;
-  margin-bottom: 0.85rem;
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  border: 1px solid var(--hairline); border-radius: 999px;
+  padding: 0.14rem 0.52rem 0.14rem 0.42rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.64rem; font-weight: 500; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); background: transparent; white-space: nowrap;
+}
+.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
+.pill-allow, .pill-pass { color: var(--allow); }
+.pill-allow .dot, .pill-pass .dot { background: var(--allow); }
+.pill-verify { color: var(--verify); }
+.pill-verify .dot { background: var(--verify); }
+.pill-fail { color: var(--fail); }
+.pill-fail .dot { background: var(--fail); }
+.pill-neutral { color: var(--muted); }
+.pill-neutral .dot { background: var(--dim); }
+.pill-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 1rem 0; }
+
+.stat-value {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 1.15rem; font-weight: 600; letter-spacing: -0.03em; color: var(--ink);
+}
+.stat-caption { margin-top: 0.3rem; font-size: 0.72rem; color: var(--dim); }
+.stat-row.four {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem; margin: 0.5rem 0 1.2rem 0;
 }
 
-.section-kicker {
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #6b6b62;
-  margin: 0.2rem 0 0.35rem 0;
+.certificate {
+  border: 1px solid var(--hairline); background: var(--panel);
+  border-radius: 2px; margin: 1rem 0 0.35rem 0; overflow: hidden;
+}
+.cert-header {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  gap: 0.5rem; padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--hairline);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.72rem; color: var(--muted);
+}
+.cert-header strong { color: var(--ink); font-weight: 500; }
+.cert-context {
+  padding: 0.45rem 1rem 0.55rem; border-bottom: 1px solid var(--hairline);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.7rem; color: var(--dim);
+}
+.cert-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 1rem;
+  padding: 0.38rem 1rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.8rem;
+}
+.cert-row .k { color: var(--dim); }
+.cert-row .v { color: var(--ink); text-align: right; }
+.cert-row.selected .k, .cert-row.selected .v { color: var(--accent); }
+.cert-total {
+  display: grid; grid-template-columns: 1fr auto; gap: 1rem;
+  padding: 0.65rem 1rem; margin-top: 0.15rem;
+  border-top: 1px solid var(--hairline);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.88rem; font-weight: 600;
+}
+.cert-total .k { color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.72rem; padding-top: 0.15rem; }
+.cert-total .v { color: var(--accent); text-align: right; }
+.cert-meta {
+  padding: 0.5rem 1rem 0.75rem; font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.68rem; color: var(--dim); line-height: 1.5;
 }
 
-.section-title {
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 1.55rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  margin: 0 0 0.35rem 0;
-  color: #141411;
+.outcome-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;
+  margin: 0.5rem 0 0.75rem 0;
 }
-
-.section-copy {
-  color: #55554c;
-  font-size: 0.95rem;
-  line-height: 1.45;
-  margin: 0 0 1.1rem 0;
-  max-width: 40rem;
+.outcome-card {
+  border: 1px solid var(--hairline); background: var(--panel);
+  border-radius: 2px; padding: 1rem 1.05rem 0.95rem;
 }
+.outcome-card.best { border-color: #2a3a2e; }
+.outcome-card.trails { border-color: #3a2a22; }
+.outcome-label {
+  font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim);
+}
+.outcome-value {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: clamp(1.6rem, 3vw, 2.1rem); font-weight: 600;
+  letter-spacing: -0.03em; margin: 0.35rem 0 0.5rem 0; color: var(--ink);
+}
+.outcome-note { font-size: 0.76rem; color: var(--muted); margin: 0.35rem 0 0; }
 
+.panel {
+  border: 1px solid var(--hairline); background: var(--panel);
+  border-radius: 2px; padding: 0.35rem 0.5rem 0.15rem; margin: 0.5rem 0 0.85rem 0;
+}
 .callout {
-  border: 1px solid #d9d3c7;
-  background: #fffdf8;
-  border-radius: 14px;
-  padding: 1rem 1.15rem;
-  margin: 0.85rem 0 1.2rem 0;
+  border: 1px solid var(--hairline); background: transparent; border-radius: 2px;
+  padding: 0.85rem 1rem; margin: 0.6rem 0 1.1rem 0; color: var(--muted); font-size: 0.9rem;
 }
+.callout strong { color: var(--ink); font-weight: 600; }
 
-.callout strong {
-  color: #141411;
+table.console {
+  width: 100%; border-collapse: collapse;
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.72rem;
+  margin: 0.25rem 0 1.1rem 0;
 }
-
-.callout.warn {
-  border-color: #e2b8a0;
-  background: #fff4ec;
+table.console th, table.console td {
+  border-bottom: 1px solid var(--hairline); padding: 0.38rem 0.5rem;
+  text-align: left; color: var(--ink); vertical-align: middle;
 }
-
-.callout.good {
-  border-color: #b9e2d1;
-  background: #f1faf6;
+table.console th {
+  font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 0.62rem;
+  font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim);
 }
+table.console td.num, table.console th.num { text-align: right; }
+table.console tbody tr:nth-child(even) { background: #0e1014; }
+table.console td.status { text-align: right; white-space: nowrap; }
 
-.callout.bad {
-  border-color: #e5b4b0;
-  background: #fff1f0;
-}
-
-.action-card {
-  border: 1px solid #d9d3c7;
-  background: #fffdf8;
-  border-radius: 14px;
-  padding: 0.95rem 1rem;
-  min-height: 5.5rem;
-}
-
-.action-card.winner {
-  border-color: #0f6b4c;
-  box-shadow: inset 0 0 0 1px #0f6b4c;
-  background: #f1faf6;
-}
-
-.action-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6b6b62;
-}
-
-.action-value {
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 1.55rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  margin-top: 0.25rem;
-  color: #141411;
-}
-
-.metric-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin: 0.4rem 0 1.1rem 0;
-}
-
-.metric-card {
-  border: 1px solid #d9d3c7;
-  background: #fffdf8;
-  border-radius: 12px;
-  padding: 0.8rem 0.9rem;
-}
-
-.metric-card .label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6b6b62;
-}
-
-.metric-card .value {
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 1.35rem;
-  font-weight: 650;
-  margin-top: 0.2rem;
-  color: #141411;
+.trust-strip {
+  display: flex; flex-wrap: wrap; gap: 0.55rem 1.1rem; margin-top: 2.2rem;
+  padding-top: 1rem; border-top: 1px solid var(--hairline);
+  color: var(--dim); font-size: 0.72rem;
 }
 
 div[data-testid="stTabs"] button {
-  font-family: 'Manrope', sans-serif;
-  font-weight: 600;
+  font-family: "IBM Plex Sans", system-ui, sans-serif !important;
+  font-size: 0.78rem !important; font-weight: 500 !important;
+  letter-spacing: 0.06em; color: var(--muted) !important;
+}
+div[data-testid="stTabs"] button[aria-selected="true"] { color: var(--ink) !important; }
+div[data-baseweb="tab-highlight"] { background-color: var(--accent) !important; }
+div[data-testid="stTabs"] [data-baseweb="tab-border"] { background-color: var(--hairline) !important; }
+
+[data-testid="stSlider"] label, [data-testid="stNumberInput"] label,
+[data-testid="stSelectbox"] label { color: var(--muted) !important; font-size: 0.82rem !important; }
+[data-testid="stCaption"] {
+  color: var(--dim) !important; font-family: "IBM Plex Mono", ui-monospace, monospace !important;
 }
 
-div[data-baseweb="tab-highlight"] {
-  background-color: #0f6b4c !important;
+[data-testid="stNumberInput"] input, [data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+  background: var(--panel) !important; border-color: var(--hairline) !important; color: var(--ink) !important;
+}
+[data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"] {
+  background: var(--accent) !important; box-shadow: none !important;
+}
+[data-testid="stSlider"] [data-baseweb="slider"] div[data-testid="stThumbValue"] {
+  color: var(--accent) !important; font-family: "IBM Plex Mono", ui-monospace, monospace !important;
 }
 
-[data-testid="stMetricValue"] {
-  font-family: 'Fraunces', Georgia, serif;
+.stAltairChart, .vega-embed { background: var(--panel) !important; }
+.stAltairChart details, .vega-actions, [data-testid="stElementToolbar"],
+[data-testid="stChartToolbar"], button[title="Show data"],
+button[title="Download as PNG"], button[title="Copy Vega-Lite spec"],
+button[title="Fullscreen"] {
+  display: none !important;
 }
 
-@media (max-width: 800px) {
-  .metric-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+@media (max-width: 720px) {
+  .outcome-grid, .stat-row.four { grid-template-columns: 1fr; }
 }
 </style>
 """
+
+_LEDGER_INPUT_ORDER = (
+    "order_value", "address_quality_signal", "customer_prior_rto_rate",
+    "category", "pincode", "order_hour", "day_of_week", "month",
+    "is_weekend", "festival_period", "phone_verified", "customer_prior_orders",
+    "customer_prior_delivery_rate", "customer_prior_prepaid_attempts",
+    "customer_prior_prepaid_success_rate", "customer_order_value_ratio",
+    "pincode_prior_orders", "pincode_prior_rto_rate",
+)
+
+_CERT_CONTEXT_FIELDS = (
+    "order_value", "address_quality_signal", "customer_prior_rto_rate",
+    "category", "pincode",
+)
+
+_GATE_LABELS = {
+    "feature_allowlist_and_provenance": "feature allowlist",
+    "oracle_physical_separation": "oracle separation",
+    "prior_history_recomputation": "prior history",
+    "shuffled_label_sanity": "shuffled labels",
+}
 
 
 def load_metrics(path: Path = METRICS_PATH) -> dict[str, object]:
@@ -246,16 +327,12 @@ def load_observable_orders(path: Path = OBSERVABLE_PATH) -> pd.DataFrame:
 
 
 def minimum_profitable_cod_value(merchant: MerchantEconomics) -> float:
-    """Order value where delivered COD contribution crosses zero."""
-
     denominator = merchant.gross_margin_rate - merchant.cod_fee_rate
     if denominator <= 0:
         return float("inf")
     return (
-        merchant.forward_shipping_cost
-        + merchant.packaging_cost
-        + merchant.other_fulfillment_cost
-        + merchant.cod_fee_flat
+        merchant.forward_shipping_cost + merchant.packaging_cost
+        + merchant.other_fulfillment_cost + merchant.cod_fee_flat
     ) / denominator
 
 
@@ -266,71 +343,77 @@ def break_even_curve(
     max_value: int = 10_000,
     step: int = 100,
 ) -> pd.DataFrame:
-    """Return break-even points clipped for display on [0, 1]."""
-
     rows: list[dict[str, float | bool]] = []
     for value in range(min_value, max_value + 1, step):
         raw = cod_break_even_rto_probability(
-            OrderEconomics(order_value=float(value)),
-            merchant,
+            OrderEconomics(order_value=float(value)), merchant,
         )
-        rows.append(
-            {
-                "order_value": float(value),
-                "break_even_raw": float(raw),
-                "break_even_display": float(min(max(raw, 0.0), 1.0)),
-                "cod_never_pays": bool(raw < 0.0),
-            }
-        )
+        rows.append({
+            "order_value": float(value),
+            "break_even_raw": float(raw),
+            "break_even_display": float(min(max(raw, 0.0), 1.0)),
+            "cod_never_pays": bool(raw < 0.0),
+        })
     return pd.DataFrame(rows)
 
 
-def break_even_chart(curve: pd.DataFrame, floor_value: float) -> alt.Chart:
-    """Build a readable break-even chart with a fixed probability domain."""
-
-    base = alt.Chart(curve).encode(
-        x=alt.X(
-            "order_value:Q",
-            title="Order value (₹)",
-            scale=alt.Scale(domain=[200, 10_000]),
-            axis=alt.Axis(format=",.0f", grid=True, tickCount=8),
+def _dark_chart(chart: alt.Chart) -> alt.Chart:
+    return (
+        chart.configure_view(strokeWidth=0, fill="#12141a")
+        .configure(background="#12141a")
+        .configure_axis(
+            labelColor="#8b8a84", titleColor="#c8c6bf", gridColor="#1c1e22",
+            domainColor="#1c1e22", tickColor="#1c1e22",
+            labelFont="IBM Plex Sans", titleFont="IBM Plex Sans",
         )
+        .configure_title(color="#eceae4", font="IBM Plex Sans", fontSize=13, fontWeight=500)
+        .configure_legend(labelColor="#8b8a84", titleColor="#c8c6bf")
     )
-    line = base.mark_line(
-        color="#0f6b4c",
-        strokeWidth=3,
-    ).encode(
-        y=alt.Y(
-            "break_even_display:Q",
-            title="Break-even COD RTO probability",
-            scale=alt.Scale(domain=[0, 1]),
-            axis=alt.Axis(format=".0%"),
-        ),
+
+
+def break_even_chart(curve: pd.DataFrame, floor_value: float) -> alt.Chart:
+    base = alt.Chart(curve).encode(
+        x=alt.X("order_value:Q", title="Order value (₹)",
+                scale=alt.Scale(domain=[200, 10_000]),
+                axis=alt.Axis(format=",.0f", grid=True, tickCount=8))
+    )
+    line = base.mark_line(color="#c9a46a", strokeWidth=2.5).encode(
+        y=alt.Y("break_even_display:Q", title="Break-even COD RTO probability",
+                scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
         tooltip=[
             alt.Tooltip("order_value:Q", title="Order value", format=",.0f"),
-            alt.Tooltip(
-                "break_even_raw:Q",
-                title="Break-even RTO",
-                format=".1%",
-            ),
+            alt.Tooltip("break_even_raw:Q", title="Break-even RTO", format=".1%"),
         ],
     )
     floor = (
         alt.Chart(pd.DataFrame({"order_value": [floor_value]}))
-        .mark_rule(color="#b45309", strokeDash=[5, 4], strokeWidth=1.5)
+        .mark_rule(color="#c9a46a", strokeDash=[5, 4], strokeWidth=1.5)
         .encode(x="order_value:Q")
     )
-    return (
-        (line + floor)
-        .properties(height=340)
-        .configure_view(strokeWidth=0)
-        .configure_axis(
-            labelColor="#55554c",
-            titleColor="#2f2f2a",
-            gridColor="#e7e1d6",
-            domainColor="#d9d3c7",
+    return _dark_chart((line + floor).properties(height=340))
+
+
+def reliability_chart(calibration: pd.DataFrame) -> alt.Chart:
+    chart = (
+        alt.Chart(calibration)
+        .mark_line(
+            point=alt.OverlayMarkDef(filled=True, color="#c9a46a", size=45),
+            color="#c9a46a", strokeWidth=2,
         )
+        .encode(
+            x=alt.X("mean_predicted:Q", title="Predicted COD RTO",
+                    scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
+            y=alt.Y("observed_rate:Q", title="Observed rate",
+                    scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(format=".0%")),
+            tooltip=[
+                alt.Tooltip("mean_predicted:Q", format=".1%"),
+                alt.Tooltip("observed_rate:Q", format=".1%"),
+                alt.Tooltip("count:Q"),
+            ],
+        )
+        .properties(height=260, title="COD risk reliability")
     )
+    return _dark_chart(chart)
 
 
 @st.cache_resource
@@ -351,307 +434,534 @@ def cached_orders() -> pd.DataFrame:
     return load_observable_orders()
 
 
+def _inr(value: float, *, decimals: int = 2) -> str:
+    return f"₹{value:,.{decimals}f}"
+
+
+def _status_pill(label: str, kind: str) -> str:
+    safe_kind = kind if kind in {"allow", "verify", "fail", "pass", "neutral"} else "neutral"
+    return (
+        f'<span class="pill pill-{safe_kind}">'
+        f'<span class="dot"></span>{escape(label)}</span>'
+    )
+
+
+def _stat_callout(value: str, caption: str) -> str:
+    return (
+        '<div class="stat">'
+        f'<div class="stat-value">{escape(value)}</div>'
+        f'<div class="stat-caption">{escape(caption)}</div>'
+        "</div>"
+    )
+
+
+def _action_kind(action: str) -> str:
+    if action == "COD":
+        return "allow"
+    if action in {"OTP", "REVIEW"}:
+        return "verify"
+    return "neutral"
+
+
+def _format_feature(name: str, value: object) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "—"
+    if name == "order_value":
+        return _inr(float(value))
+    if name.endswith(("_rate", "_signal", "_ratio")):
+        return f"{float(value):.2f}"
+    if name in {"is_weekend", "festival_period", "phone_verified"}:
+        return str(int(float(value)))
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        number = float(value)
+        return str(int(number)) if number.is_integer() else f"{number:.2f}"
+    return str(value)
+
+
+def _cert_row(label: str, value: str, *, selected: bool = False) -> str:
+    klass = "cert-row selected" if selected else "cert-row"
+    return (
+        f'<div class="{klass}"><span class="k">{escape(label)}</span>'
+        f'<span class="v">{escape(value)}</span></div>'
+    )
+
+
+def _hero_strip(metrics: dict[str, object]) -> str:
+    policies = metrics["policies"]
+    always_cod = float(policies["always_cod"]["realized_contribution_per_order"])
+    sentinel = float(policies["cod_sentinel"]["realized_contribution_per_order"])
+    always_otp = float(policies["always_otp"]["realized_contribution_per_order"])
+    delta = float(
+        policies["cod_sentinel"]["improvement_vs_best_simple_baseline_per_order"]
+    )
+    status = _status_pill("trails", "fail") if delta < 0 else _status_pill("wins", "pass")
+    delta_text = (
+        f"Trails best baseline by {_inr(abs(delta))} / order"
+        if delta < 0
+        else f"Beats best baseline by {_inr(delta)} / order"
+    )
+    return (
+        '<section class="hero-proof">'
+        '<div class="hero-proof-top">'
+        f'<div class="hero-proof-value">{_inr(sentinel)}</div>'
+        f'<div>{status}</div>'
+        "</div>"
+        '<p class="hero-proof-caption">Sentinel · ₹ / order · frozen temporal test</p>'
+        f'<p class="hero-proof-caption">{escape(delta_text)}</p>'
+        "</section>"
+        '<div class="hero-baselines">'
+        f'<span>Always COD {_inr(always_cod)}</span>'
+        '<span class="sep">·</span>'
+        f'<span>Always OTP {_inr(always_otp)}</span>'
+        "</div>"
+    )
+
+
+def _decision_certificate(decision: Decision, row: dict[str, object]) -> str:
+    context_bits = [
+        f"{name} {_format_feature(name, row[name])}"
+        for name in _CERT_CONTEXT_FIELDS
+        if name in row
+    ]
+    context = " · ".join(context_bits)
+    header = (
+        '<div class="cert-header">'
+        f"<strong>{escape(str(decision.order_id))}</strong>"
+        "<span>synthetic test</span>"
+        f"{_status_pill('verified', 'pass')}"
+        "</div>"
+    )
+    if decision.requires_review:
+        body = _cert_row("Action", "REVIEW", selected=True)
+        total = (
+            '<div class="cert-total">'
+            '<span class="k">Review</span><span class="v">REVIEW</span></div>'
+        )
+    else:
+        assert decision.probabilities is not None
+        assert decision.expected_contributions is not None
+        body = _cert_row("Predicted COD RTO", f"{decision.probabilities['cod_rto']:.1%}")
+        for action in ("COD", "OTP", "PREPAID"):
+            body += _cert_row(
+                f"EV {action}",
+                _inr(decision.expected_contributions[action]),
+                selected=action == decision.selected_action,
+            )
+        total = (
+            '<div class="cert-total">'
+            f'<span class="k">Recommend {escape(decision.selected_action)}</span>'
+            f'<span class="v">{_inr(decision.expected_contributions[decision.selected_action])}</span>'
+            "</div>"
+        )
+    meta = (
+        f"decision {escape(decision.decision_id)} · "
+        f"model {escape(decision.versions['model'])} · "
+        f"policy {escape(decision.versions['policy'])}"
+    )
+    tags = "".join(_status_pill(code, "neutral") for code in decision.reason_codes)
+    action_pill = _status_pill(decision.selected_action, _action_kind(decision.selected_action))
+    return (
+        f'<aside class="certificate">{header}'
+        f'<div class="cert-context">{escape(context)}</div>'
+        f"{body}{total}"
+        f'<div class="cert-meta">{meta}</div></aside>'
+        f'<div class="pill-row">{action_pill}{tags}</div>'
+    )
+
+
+def _all_inputs_table(row: dict[str, object]) -> str:
+    rows = [
+        [name, _format_feature(name, row[name])]
+        for name in _LEDGER_INPUT_ORDER
+        if name in row
+    ]
+    return _console_table([("Feature", False), ("Value", False)], rows)
+
+
+def _outcome_cards(metrics: dict[str, object]) -> str:
+    policies = metrics["policies"]
+    sentinel = float(policies["cod_sentinel"]["realized_contribution_per_order"])
+    always_otp = float(policies["always_otp"]["realized_contribution_per_order"])
+    delta = float(policies["cod_sentinel"]["improvement_vs_best_simple_baseline_per_order"])
+    trails_class = "trails" if delta < 0 else ""
+    best_class = "best"
+    note = (
+        f"Trails best baseline by {_inr(abs(delta))} / order · synthetic held-out test"
+        if delta < 0
+        else f"Beats best baseline by {_inr(delta)} / order · synthetic held-out test"
+    )
+    return (
+        f'<div class="outcome-grid">'
+        f'<div class="outcome-card {trails_class}">'
+        f'<div class="outcome-label">COD Sentinel</div>'
+        f'<div class="outcome-value">{_inr(sentinel)}</div>'
+        f'{_status_pill("trails" if delta < 0 else "wins", "fail" if delta < 0 else "pass")}'
+        f'<p class="outcome-note">₹ / order · realized contribution</p></div>'
+        f'<div class="outcome-card {best_class}">'
+        f'<div class="outcome-label">Always OTP · best simple baseline</div>'
+        f'<div class="outcome-value">{_inr(always_otp)}</div>'
+        f'{_status_pill("best", "pass")}'
+        f'<p class="outcome-note">₹ / order · realized contribution</p></div>'
+        f"</div>"
+        f'<p class="outcome-note">{escape(note)}</p>'
+    )
+
+
+def _console_table(
+    headers: list[tuple[str, bool]],
+    rows: list[list[str]],
+    *,
+    status: list[str] | None = None,
+) -> str:
+    head = "".join(
+        f'<th class="{"num" if numeric else ""}">{escape(title)}</th>'
+        for title, numeric in headers
+    )
+    if status is not None:
+        head += '<th class="num">Status</th>'
+    body_rows = []
+    for index, cells in enumerate(rows):
+        tds = []
+        for cell, (_, numeric) in zip(cells, headers, strict=True):
+            klass = ' class="num"' if numeric else ""
+            tds.append(f"<td{klass}>{escape(cell)}</td>")
+        if status is not None:
+            tds.append(f'<td class="status">{status[index]}</td>')
+        body_rows.append(f"<tr>{''.join(tds)}</tr>")
+    return (
+        '<table class="console"><thead><tr>'
+        f"{head}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
+    )
+
+
+def _policy_status_pills(policies: dict[str, dict[str, object]]) -> list[str]:
+    best_key = str(policies["cod_sentinel"].get("best_simple_baseline", ""))
+    delta = float(policies["cod_sentinel"]["improvement_vs_best_simple_baseline_per_order"])
+    pills: list[str] = []
+    for key in policies:
+        if key == "always_cod":
+            pills.append(_status_pill("baseline", "neutral"))
+        elif key == best_key:
+            pills.append(_status_pill("best", "pass"))
+        elif key == "cod_sentinel" and delta < 0:
+            pills.append(_status_pill("trails", "fail"))
+        elif key == "cod_sentinel":
+            pills.append(_status_pill("wins", "pass"))
+        else:
+            pills.append(_status_pill("—", "neutral"))
+    return pills
+
+
+def _leakage_pills(path: Path = LEAKAGE_REPORT_PATH) -> str:
+    if not path.exists():
+        return f'<div class="pill-row">{_status_pill("leakage unavailable", "verify")}</div>'
+    report = json.loads(path.read_text(encoding="utf-8"))
+    gates = report.get("gates", {})
+    chips = [
+        _status_pill(label, "pass" if str(gates.get(key, "")).lower() == "passed" else "fail")
+        for key, label in _GATE_LABELS.items()
+    ]
+    prefix = _status_pill("leakage", "neutral")
+    return f'<div class="pill-row">{prefix}{"".join(chips)}</div>'
+
+
+def _trust_strip() -> str:
+    badges = (
+        "synthetic simulator only", "no conformal coverage guarantee",
+        "REVIEW never touches oracle data", "pipeline, not an agent",
+    )
+    return f'<div class="trust-strip">{"".join(f"<span>{escape(b)}</span>" for b in badges)}</div>'
+
+
+def _flow_rail() -> str:
+    steps = ("Features", "Score", "Calibrate", "Decide")
+    pieces = []
+    for index, label in enumerate(steps, start=1):
+        if index > 1:
+            pieces.append('<span class="flow-arrow">→</span>')
+        pieces.append(f'<span class="flow-step"><em>0{index}</em>{escape(label)}</span>')
+    return f'<nav class="flow-rail">{"".join(pieces)}</nav>'
+
+
 def _economics_tab(engine: DecisionEngine) -> None:
-    st.markdown('<p class="section-kicker">Merchant economics</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-kicker">01 / Economics</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">When does COD stop paying?</p>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="section-title">When does COD stop paying?</p>',
+        '<p class="section-copy">No universal RTO threshold. The curve uses the same '
+        "contribution engine as the policy — not a hand-tuned cutoff.</p>",
         unsafe_allow_html=True,
     )
-    st.markdown(
-        '<p class="section-copy">There is no universal RTO threshold. The '
-        "curve below is derived from the same contribution engine the policy "
-        "uses — fixed logistics, margin, and damage — not a hand-tuned cutoff."
-        "</p>",
-        unsafe_allow_html=True,
-    )
-
     merchant = engine.settings.merchant_economics
-    controls = st.columns(4)
-    with controls[0]:
-        margin = st.slider(
-            "Gross margin rate",
-            min_value=0.05,
-            max_value=0.80,
-            value=float(merchant.gross_margin_rate),
-            step=0.01,
-            help="Contribution rate before logistics and payment fees.",
-        )
-    with controls[1]:
-        forward = st.slider(
-            "Forward shipping (₹)",
-            min_value=0.0,
-            max_value=250.0,
-            value=float(merchant.forward_shipping_cost),
-            step=5.0,
-        )
-    with controls[2]:
-        reverse = st.slider(
-            "Reverse shipping (₹)",
-            min_value=0.0,
-            max_value=300.0,
-            value=float(merchant.reverse_shipping_cost),
-            step=5.0,
-        )
-    with controls[3]:
-        damage = st.slider(
-            "Inventory damage rate",
-            min_value=0.0,
-            max_value=0.80,
-            value=float(merchant.inventory_damage_rate),
-            step=0.01,
-        )
-
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        margin = st.slider("Gross margin rate", 0.05, 0.80, float(merchant.gross_margin_rate), 0.01)
+    with c2:
+        forward = st.slider("Forward shipping (₹)", 0.0, 250.0, float(merchant.forward_shipping_cost), 5.0)
+    with c3:
+        reverse = st.slider("Reverse shipping (₹)", 0.0, 300.0, float(merchant.reverse_shipping_cost), 5.0)
+    with c4:
+        damage = st.slider("Inventory damage rate", 0.0, 0.80, float(merchant.inventory_damage_rate), 0.01)
     scenario = replace(
-        merchant,
-        gross_margin_rate=margin,
-        forward_shipping_cost=forward,
-        reverse_shipping_cost=reverse,
-        inventory_damage_rate=damage,
+        merchant, gross_margin_rate=margin, forward_shipping_cost=forward,
+        reverse_shipping_cost=reverse, inventory_damage_rate=damage,
     )
     floor = minimum_profitable_cod_value(scenario)
-    curve = break_even_curve(scenario)
-    st.altair_chart(break_even_chart(curve, floor), use_container_width=True)
-
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.altair_chart(break_even_chart(break_even_curve(scenario), floor), use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
     if floor == float("inf"):
-        message = (
-            "With these fees, delivered COD never becomes contribution-positive."
-        )
-        tone = "warn"
+        msg = "Delivered COD never becomes contribution-positive at these fees. Live slider result."
     else:
-        message = (
-            f"Below about <strong>₹{floor:,.0f}</strong>, delivered COD loses "
-            "money at any RTO probability. Above that floor, the break-even "
-            "risk rises and saturates — higher order value buys more risk "
-            "tolerance when margin and damage rates stay fixed."
+        msg = (
+            f"Below <strong>₹{floor:,.0f}</strong>, delivered COD loses at any RTO probability. "
+            "Live slider result, not a frozen evaluation metric."
         )
-        tone = "good"
-    st.markdown(f'<div class="callout {tone}">{message}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="callout">{msg}</div>', unsafe_allow_html=True)
 
 
 def _live_decision_tab(engine: DecisionEngine, orders: pd.DataFrame) -> None:
-    st.markdown('<p class="section-kicker">Live decision</p>', unsafe_allow_html=True)
-    st.markdown(
-        '<p class="section-title">Risk is not the decision</p>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<p class="section-copy">Pick a synthetic held-out order. The models '
-        "estimate action outcomes; the economic engine chooses COD, OTP, or "
-        "prepaid. No simulator truth enters this screen.</p>",
-        unsafe_allow_html=True,
-    )
-
+    st.markdown('<p class="section-kicker">02 / Decision</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">One held-out order</p>', unsafe_allow_html=True)
     test_orders = orders.loc[orders["split"] == "test"].reset_index(drop=True)
-    left, right = st.columns([1.15, 1.0], gap="large")
-    with left:
-        selected_id = st.selectbox(
-            "Synthetic order",
-            test_orders["order_id"].tolist(),
-        )
-        row = test_orders.loc[test_orders["order_id"] == selected_id].iloc[0].to_dict()
-        row["order_value"] = st.number_input(
-            "Order value (₹)",
-            min_value=1.0,
-            value=float(row["order_value"]),
-            step=100.0,
-        )
+    c1, c2 = st.columns(2)
+    with c1:
+        selected_id = st.selectbox("Synthetic order", test_orders["order_id"].tolist())
+    row = test_orders.loc[test_orders["order_id"] == selected_id].iloc[0].to_dict()
+    with c2:
+        row["order_value"] = st.number_input("Order value (₹)", 1.0, value=float(row["order_value"]), step=100.0)
+    c3, c4 = st.columns(2)
+    with c3:
         row["address_quality_signal"] = st.slider(
-            "Address-quality signal",
-            min_value=0.0,
-            max_value=1.0,
-            value=float(row["address_quality_signal"]),
-            step=0.01,
-        )
+            "Address-quality signal", 0.0, 1.0, float(row["address_quality_signal"]), 0.01)
+    with c4:
         row["customer_prior_rto_rate"] = st.slider(
-            "Prior customer RTO rate",
-            min_value=0.0,
-            max_value=1.0,
-            value=float(row["customer_prior_rto_rate"]),
-            step=0.01,
-        )
-
+            "Prior customer RTO rate", 0.0, 1.0, float(row["customer_prior_rto_rate"]), 0.01)
     decision = engine.decide(row)
-    with right:
-        if decision.requires_review:
-            st.markdown(
-                '<div class="callout warn"><strong>REVIEW</strong><br>'
-                f"{', '.join(decision.reason_codes)}</div>",
-                unsafe_allow_html=True,
-            )
-            return
+    st.markdown(_decision_certificate(decision, row), unsafe_allow_html=True)
+    with st.expander("All runtime inputs"):
+        st.markdown(_all_inputs_table(row), unsafe_allow_html=True)
 
-        assert decision.probabilities is not None
-        assert decision.expected_contributions is not None
-        st.metric(
-            "Predicted COD RTO risk",
-            f"{decision.probabilities['cod_rto']:.1%}",
+
+def _agent_credential_strip(missing: list[str]) -> str:
+    providers = (
+        ("Anthropic", "ANTHROPIC_API_KEY"),
+        ("Google Maps", "GOOGLE_MAPS_API_KEY"),
+        ("Twilio", "TWILIO_ACCOUNT_SID"),
+        ("Razorpay", "RAZORPAY_KEY_ID"),
+    )
+    pills = []
+    for label, env_name in providers:
+        status = "pass" if env_name not in missing else "fail"
+        pills.append(_status_pill(label, status))
+    return f'<div class="pill-row">{"".join(pills)}</div>'
+
+
+def _agent_timeline(steps: list[object]) -> str:
+    if not steps:
+        return '<div class="callout">No agent steps recorded yet.</div>'
+    rows = []
+    for step in steps:
+        data = step.to_dict() if hasattr(step, "to_dict") else step
+        tool = escape(str(data.get("tool", "—")))
+        model = escape(str(data.get("model") or "—"))
+        output = escape(str(data.get("output_summary", "")))
+        rows.append(
+            f'<tr><td>{data.get("step")}</td><td>{tool}</td>'
+            f"<td>{model}</td><td>{output}</td></tr>"
         )
-        cards = st.columns(3)
-        for column, action in zip(cards, ("COD", "OTP", "PREPAID")):
-            winner = action == decision.selected_action
-            with column:
-                st.markdown(
-                    f"""
-                    <div class="action-card {'winner' if winner else ''}">
-                      <div class="action-label">{action}</div>
-                      <div class="action-value">
-                        ₹{decision.expected_contributions[action]:,.0f}
-                      </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+    return (
+        '<table class="console-table"><thead><tr>'
+        "<th>Step</th><th>Tool</th><th>Model</th><th>Output</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def _agent_tab(engine: DecisionEngine, orders: pd.DataFrame) -> None:
+    st.markdown('<p class="section-kicker">04 / Agent</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">Stretch orchestrator overlay</p>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="section-copy">Optional live-agent path for address validation, '
+        "WhatsApp prepaid negotiation, and Razorpay payment links. "
+        "Does not affect frozen tab 03 evidence.</p>",
+        unsafe_allow_html=True,
+    )
+    try:
+        from cod_sentinel.orchestrator.credentials import load_credentials
+        from cod_sentinel.orchestrator.runner import OrchestratorRunner
+        from cod_sentinel.orchestrator.schemas import CheckoutEvent
+    except ImportError:
         st.markdown(
-            f'<div class="callout good"><strong>Recommend {decision.selected_action}</strong>'
-            f"<br>{' · '.join(decision.reason_codes)}</div>",
+            '<div class="callout"><strong>Agent extras not installed.</strong> '
+            "Run <code>make install-agent</code> then set credentials in <code>.env</code>.</div>",
             unsafe_allow_html=True,
         )
-        st.caption(
-            f"Decision {decision.decision_id} · model "
-            f"{decision.versions['model']} · policy {decision.versions['policy']}"
+        return
+
+    credentials = load_credentials()
+    st.markdown(_agent_credential_strip(credentials.missing), unsafe_allow_html=True)
+    if credentials.missing:
+        st.markdown(
+            '<div class="callout">Missing credentials: '
+            f"{escape(', '.join(credentials.missing))}. "
+            "Copy <code>.env.example</code> to <code>.env</code> and fill in live keys.</div>",
+            unsafe_allow_html=True,
         )
+
+    test_orders = orders.loc[orders["split"] == "test"].reset_index(drop=True)
+    c1, c2 = st.columns(2)
+    with c1:
+        selected_id = st.selectbox("Synthetic order", test_orders["order_id"].tolist(), key="agent_order")
+    with c2:
+        payment_method = st.selectbox("Payment method", ("COD", "PREPAID"), key="agent_payment")
+    row = test_orders.loc[test_orders["order_id"] == selected_id].iloc[0].to_dict()
+    order_features = {name: row[name] for name in RUNTIME_FEATURES if name in row}
+    raw_address = st.text_area(
+        "Raw shipping address",
+        value="Flat 12, near Metro Station, Karol Bagh, New Delhi 110005",
+        key="agent_address",
+    )
+    buyer_phone = st.text_input("Buyer phone (E.164)", value="+919876543210", key="agent_phone")
+    buyer_reply = st.text_input(
+        "Buyer reply (for continuing negotiation)",
+        value="",
+        key="agent_buyer_reply",
+    )
+    negotiation_started = st.session_state.get("agent_negotiation_started", False)
+
+    if st.button("Run orchestrator", type="primary"):
+        event = CheckoutEvent(
+            order_id=str(selected_id),
+            payment_method=payment_method,
+            raw_address=raw_address,
+            buyer_phone=buyer_phone,
+            order_features=order_features,
+        )
+        runner = OrchestratorRunner(engine=engine, credentials=credentials)
+        result = runner.run(
+            event,
+            buyer_reply=buyer_reply or None,
+            negotiation_started=negotiation_started,
+        )
+        st.session_state["agent_last_result"] = result.to_dict()
+        if "NEGOTIATION_IN_PROGRESS" in result.reason_codes:
+            st.session_state["agent_negotiation_started"] = True
+        else:
+            st.session_state["agent_negotiation_started"] = False
+
+    result_payload = st.session_state.get("agent_last_result")
+    if result_payload:
+        st.markdown(
+            f'<div class="callout"><strong>{escape(result_payload["final_status"])}</strong> '
+            f"→ {escape(result_payload['selected_action'])}</div>",
+            unsafe_allow_html=True,
+        )
+        if result_payload.get("payment_link_url"):
+            st.markdown(f"Payment link: `{result_payload['payment_link_url']}`")
+        steps = result_payload.get("steps", [])
+        st.markdown(_agent_timeline(steps), unsafe_allow_html=True)
 
 
 def _evaluation_tab(metrics: dict[str, object]) -> None:
-    st.markdown('<p class="section-kicker">Held-out evaluation</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-kicker">03 / Evidence</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">Honest synthetic evidence</p>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="section-title">Honest synthetic evidence</p>',
+        '<p class="section-copy">Frozen on validation, scored once on the temporal test split. '
+        "Realized contribution from held-out potential outcomes — not predicted EV.</p>",
         unsafe_allow_html=True,
     )
-    st.markdown(
-        '<p class="section-copy">Frozen on validation, scored once on the '
-        "temporal test split. Contribution is realized from held-out potential "
-        "outcomes — not predicted EV.</p>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="callout warn"><strong>Synthetic simulator only.</strong> '
-        "These numbers are not merchant savings claims.</div>",
-        unsafe_allow_html=True,
-    )
-
+    st.markdown(_outcome_cards(metrics), unsafe_allow_html=True)
     risk = metrics["risk_model"]
     st.markdown(
-        f"""
-        <div class="metric-strip">
-          <div class="metric-card"><div class="label">Precision</div>
-          <div class="value">{risk['precision']:.3f}</div></div>
-          <div class="metric-card"><div class="label">Recall</div>
-          <div class="value">{risk['recall']:.3f}</div></div>
-          <div class="metric-card"><div class="label">PR-AUC</div>
-          <div class="value">{risk['pr_auc']:.3f}</div></div>
-          <div class="metric-card"><div class="label">Brier</div>
-          <div class="value">{risk['brier']:.3f}</div></div>
-        </div>
-        """,
+        '<div class="stat-row four">'
+        + _stat_callout(f"{risk['precision']:.3f}", "Precision · frozen test")
+        + _stat_callout(f"{risk['recall']:.3f}", "Recall · frozen test")
+        + _stat_callout(f"{risk['pr_auc']:.3f}", "PR-AUC · frozen test")
+        + _stat_callout(f"{risk['brier']:.3f}", "Brier · frozen test")
+        + "</div>",
         unsafe_allow_html=True,
     )
-
+    st.markdown('<p class="section-kicker">Leakage gates</p>', unsafe_allow_html=True)
+    st.markdown(_leakage_pills(), unsafe_allow_html=True)
     policies = metrics["policies"]
-    comparison = pd.DataFrame(
+    comparison_rows = [
         [
-            {
-                "Policy": value["name"],
-                "Contribution / order (₹)": round(
-                    float(value["realized_contribution_per_order"]),
-                    2,
-                ),
-                "Vs always COD (₹)": round(
-                    float(value["improvement_vs_always_cod_total"]),
-                    0,
-                ),
-                "Intervention rate": round(float(value["intervention_rate"]), 3),
-                "False-positive cost (₹)": round(
-                    float(value["false_positive_cost"]),
-                    0,
-                ),
-            }
-            for value in policies.values()
+            str(v["name"]),
+            f"{float(v['realized_contribution_per_order']):.2f}",
+            f"{float(v['improvement_vs_always_cod_total']):.0f}",
+            f"{float(v['intervention_rate']):.3f}",
+            f"{float(v['false_positive_cost']):.0f}",
         ]
+        for v in policies.values()
+    ]
+    st.markdown(
+        _console_table(
+            [("Policy", False), ("₹ / order", True), ("vs always COD", True),
+             ("Intervention", True), ("FP cost", True)],
+            comparison_rows,
+            status=_policy_status_pills(policies),
+        ),
+        unsafe_allow_html=True,
     )
-    st.dataframe(comparison, hide_index=True, use_container_width=True)
-
-    cod_sentinel = policies["cod_sentinel"]
-    delta = float(cod_sentinel["improvement_vs_best_simple_baseline_per_order"])
-    if delta < 0:
-        st.markdown(
-            '<div class="callout bad"><strong>Adverse result.</strong> '
-            f"COD Sentinel trails the best simple baseline by "
-            f"₹{abs(delta):,.2f} per order in this simulator.</div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '<div class="callout good"><strong>Wins the baseline.</strong> '
-            f"COD Sentinel beats the best simple baseline by "
-            f"₹{delta:,.2f} per order in this simulator.</div>",
-            unsafe_allow_html=True,
-        )
-
-    calibration = pd.DataFrame(risk["calibration_bins"])
-    reliability = (
-        alt.Chart(calibration)
-        .mark_line(point=True, color="#0f6b4c", strokeWidth=2.5)
-        .encode(
-            x=alt.X("mean_predicted:Q", title="Predicted COD RTO", axis=alt.Axis(format=".0%")),
-            y=alt.Y("observed_rate:Q", title="Observed rate", axis=alt.Axis(format=".0%")),
-            tooltip=[
-                alt.Tooltip("mean_predicted:Q", format=".1%"),
-                alt.Tooltip("observed_rate:Q", format=".1%"),
-                alt.Tooltip("count:Q"),
-            ],
-        )
-        .properties(height=260, title="COD risk reliability")
-        .configure_view(strokeWidth=0)
-    )
-    st.altair_chart(reliability, use_container_width=True)
-
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.altair_chart(reliability_chart(pd.DataFrame(risk["calibration_bins"])), use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
     st.caption("Predicted-policy sensitivity; potential outcomes are unchanged.")
-    scenarios = metrics["sensitivity"]["scenarios"]
-    scenario_name = st.selectbox("Sensitivity variable", sorted(scenarios))
-    scenario_rows = pd.DataFrame(scenarios[scenario_name])
-    st.dataframe(scenario_rows, hide_index=True, use_container_width=True)
+    scenario_name = st.selectbox("Sensitivity variable", sorted(metrics["sensitivity"]["scenarios"]))
+    scenario_rows = [
+        [
+            f"{float(item['value']):g}",
+            f"{float(item['mean_selected_predicted_ev']):.2f}",
+            " · ".join(f"{a} {int(c)}" for a, c in item.get("action_distribution", {}).items()),
+        ]
+        for item in metrics["sensitivity"]["scenarios"][scenario_name]
+    ]
+    st.markdown(
+        _console_table(
+            [("Value", True), ("Mean selected predicted EV", True), ("Action distribution", False)],
+            scenario_rows,
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 def main() -> None:
     st.set_page_config(
-        page_title="COD Sentinel",
-        page_icon="◈",
-        layout="wide",
+        page_title="COD Sentinel", page_icon="◈", layout="wide",
         initial_sidebar_state="collapsed",
+        menu_items={"Get Help": None, "Report a bug": None, "About": None},
     )
     st.markdown(_CSS, unsafe_allow_html=True)
-    st.markdown('<div class="pill">Razorpay Buildathon · Risk Manager</div>', unsafe_allow_html=True)
-    st.markdown('<h1 class="brand-mark">COD Sentinel</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="brand-kicker">Sentinel</p>', unsafe_allow_html=True)
+    st.markdown('<h1 class="brand-mark">Risk is not the decision.</h1>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="brand-sub">Risk is not the decision. An economic layer that '
-        "turns calibrated COD risk into COD, OTP, or prepaid — then measures "
-        "whether that choice actually paid.</p>",
+        '<p class="brand-sub">An economic layer that turns calibrated COD risk into COD, '
+        "OTP, or prepaid — then measures whether that choice actually paid.</p>",
         unsafe_allow_html=True,
     )
-
     try:
         engine = load_engine()
         metrics = cached_metrics()
         orders = cached_orders()
     except Exception as error:
         st.markdown(
-            '<div class="callout warn"><strong>Artifacts unavailable.</strong> '
+            '<div class="callout"><strong>Artifacts unavailable.</strong> '
             "Run <code>make pipeline</code> then reopen the app.</div>",
             unsafe_allow_html=True,
         )
         st.code(str(error))
         st.stop()
-
-    economics_tab, decision_tab, evaluation_tab = st.tabs(
-        ["Economics", "Live Decision", "Held-Out Evaluation"]
-    )
-    with economics_tab:
+    st.markdown(_hero_strip(metrics), unsafe_allow_html=True)
+    st.markdown(_flow_rail(), unsafe_allow_html=True)
+    tab1, tab2, tab3, tab4 = st.tabs(["01 Economics", "02 Decision", "03 Evidence", "04 Agent"])
+    with tab1:
         _economics_tab(engine)
-    with decision_tab:
+    with tab2:
         _live_decision_tab(engine, orders)
-    with evaluation_tab:
+    with tab3:
         _evaluation_tab(metrics)
+    with tab4:
+        _agent_tab(engine, orders)
+    st.markdown(_trust_strip(), unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

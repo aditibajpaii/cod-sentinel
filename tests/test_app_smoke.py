@@ -60,3 +60,93 @@ def test_observable_loader_parses_timestamp(tmp_path, synthetic_world) -> None:
     loaded = app.load_observable_orders(path)
 
     assert pd.api.types.is_datetime64_any_dtype(loaded["ordered_at"])
+
+
+def test_status_pill_and_stat_callout_are_reusable_html() -> None:
+    pill = app._status_pill("OTP", "verify")
+    stat = app._stat_callout("0.411", "Precision · frozen test")
+
+    assert 'class="pill pill-verify"' in pill
+    assert "OTP" in pill
+    assert 'class="stat-value"' in stat
+    assert "0.411" in stat
+
+
+def test_hero_strip_uses_frozen_policy_numbers() -> None:
+    metrics = {
+        "policies": {
+            "always_cod": {"realized_contribution_per_order": 152.78262059200006},
+            "always_otp": {"realized_contribution_per_order": 242.3051690046667},
+            "cod_sentinel": {
+                "realized_contribution_per_order": 218.49186688000003,
+                "improvement_vs_best_simple_baseline_per_order": -23.813302124666677,
+            },
+        }
+    }
+
+    html = app._hero_strip(metrics)
+
+    assert "₹152.78" in html
+    assert "₹218.49" in html
+    assert "₹242.31" in html
+    assert "₹23.81" in html
+    assert "trails" in html
+    assert "hero-proof-value" in html
+
+
+def test_outcome_cards_use_frozen_policy_numbers() -> None:
+    metrics = {
+        "policies": {
+            "always_otp": {"realized_contribution_per_order": 242.3051690046667},
+            "cod_sentinel": {
+                "realized_contribution_per_order": 218.49186688000003,
+                "improvement_vs_best_simple_baseline_per_order": -23.813302124666677,
+            },
+        }
+    }
+
+    html = app._outcome_cards(metrics)
+
+    assert "₹218.49" in html
+    assert "₹242.31" in html
+    assert "outcome-card" in html
+    assert "best" in html
+
+
+def test_agent_credential_strip_marks_missing_keys() -> None:
+    html = app._agent_credential_strip(["ANTHROPIC_API_KEY", "RAZORPAY_KEY_ID"])
+    assert "Anthropic" in html
+    assert "pill-fail" in html
+    assert "pill-pass" in html
+
+
+def test_agent_timeline_renders_steps() -> None:
+    html = app._agent_timeline(
+        [{"step": 1, "tool": "economics_tool", "model": None, "output_summary": "COD"}]
+    )
+    assert "economics_tool" in html
+    assert "console-table" in html
+
+
+def test_leakage_pills_read_report_without_recomputing(tmp_path) -> None:
+    path = tmp_path / "leakage_report.json"
+    path.write_text(
+        json.dumps(
+            {
+                "passed": True,
+                "gates": {
+                    "feature_allowlist_and_provenance": "passed",
+                    "oracle_physical_separation": "passed",
+                    "prior_history_recomputation": "passed",
+                    "shuffled_label_sanity": "passed",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    html = app._leakage_pills(path)
+
+    assert "feature allowlist" in html
+    assert "pill-pass" in html
+    assert "unavailable" not in html

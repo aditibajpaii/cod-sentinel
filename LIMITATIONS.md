@@ -66,5 +66,17 @@ and applies only to the mean contribution difference.
 ## No production platform
 
 There is no authentication, database, API service, deployment configuration,
-PII handling system, monitoring, or Razorpay integration. The app is a local
-competition demo over synthetic data.
+PII handling system, or monitoring. The app is a local competition demo over
+synthetic data.
+
+## Optional agent overlay (stretch)
+
+Tab 04 and `make agent-demo` add a live-agent checkout path: address
+structuring (Google Geocoding), Hinglish WhatsApp negotiation (Twilio), and
+Razorpay payment links. This layer:
+
+- requires live API credentials (`make install-agent` and `.env`)
+- is nondeterministic and outside frozen tab 03 evidence
+- uses a Streamlit buyer-reply field for inbound WhatsApp in demo mode;
+  production would need a webhook
+- never reads oracle or latent simulator columns at runtime

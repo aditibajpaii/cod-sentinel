@@ -8,6 +8,7 @@ from hypothesis import strategies as st
 from cod_sentinel.economics import (
     cod_break_even_rto_probability,
     expected_contribution,
+    max_profitable_prepaid_discount,
     realized_contribution,
 )
 from cod_sentinel.schemas import (
@@ -302,3 +303,57 @@ def test_expected_otp_is_convex_combination_of_realized_branches(
     )
 
     assert min(branches) <= expected <= max(branches)
+
+
+def test_max_profitable_prepaid_discount_returns_zero_when_unprofitable(
+    order: OrderEconomics,
+    merchant: MerchantEconomics,
+) -> None:
+    prepaid_probs = ActionProbabilities(
+        conversion_probability=0.10,
+        delivery_probability=0.50,
+    )
+    fallback_probs = ActionProbabilities.for_cod(0.20)
+
+    assert (
+        max_profitable_prepaid_discount(
+            order,
+            merchant,
+            prepaid_probs,
+            Action.COD,
+            fallback_probs,
+        )
+        == 0.0
+    )
+
+
+def test_max_profitable_prepaid_discount_respects_cap_and_floor(
+    order: OrderEconomics,
+    merchant: MerchantEconomics,
+) -> None:
+    prepaid_probs = ActionProbabilities(
+        conversion_probability=0.90,
+        delivery_probability=0.90,
+    )
+    fallback_probs = ActionProbabilities.for_cod(0.60)
+
+    max_rate = max_profitable_prepaid_discount(
+        order,
+        merchant,
+        prepaid_probs,
+        Action.COD,
+        fallback_probs,
+        cap=0.05,
+    )
+
+    assert 0.0 <= max_rate <= 0.05
+    adjusted = replace(merchant, prepaid_discount_rate=max_rate)
+    assert expected_contribution(
+        Action.PREPAID,
+        order,
+        adjusted,
+        prepaid_probs,
+    ) >= max(
+        expected_contribution(Action.COD, order, merchant, fallback_probs),
+        0.0,
+    )

@@ -1,9 +1,12 @@
-.PHONY: install test smoke pipeline generate leakage train freeze evaluate app
+.PHONY: install test smoke pipeline generate leakage train freeze evaluate plots ledger-sample app install-agent agent-demo
 
 PYTHON ?= python3
 
 install:
 	$(PYTHON) -m pip install -e ".[dev]"
+
+install-agent:
+	$(PYTHON) -m pip install -e ".[dev,agent]"
 
 test:
 	$(PYTHON) -m pytest
@@ -33,5 +36,17 @@ freeze:
 evaluate:
 	$(PYTHON) -c "from cod_sentinel.evaluation import main; main()"
 
+plots:
+	$(PYTHON) -c "from cod_sentinel.plots import main; main()"
+
+ledger-sample:
+	$(PYTHON) -c "from cod_sentinel.ledger import main; main()"
+
 app:
 	$(PYTHON) -m streamlit run app.py
+
+agent-demo:
+	@test -n "$(ORDER_ID)" || (echo "Set ORDER_ID=..." && exit 1)
+	@test -n "$(ADDRESS)" || (echo "Set ADDRESS=..." && exit 1)
+	@test -n "$(PHONE)" || (echo "Set PHONE=..." && exit 1)
+	$(PYTHON) -m cod_sentinel.orchestrator --order-id "$(ORDER_ID)" --address "$(ADDRESS)" --phone "$(PHONE)"
