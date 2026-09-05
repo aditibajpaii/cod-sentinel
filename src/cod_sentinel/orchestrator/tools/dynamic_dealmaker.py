@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from cod_sentinel.orchestrator.credentials import AgentCredentials
+from cod_sentinel.orchestrator.credentials import RAZORPAY, AgentCredentials
 from cod_sentinel.orchestrator.models import DEALMAKER_MODEL
 from cod_sentinel.orchestrator.prompts import DYNAMIC_DEALMAKER_SYSTEM_PROMPT
 
@@ -49,6 +49,15 @@ class DynamicDealmakerTool:
             buyer_phone=buyer_phone,
             customer_name=customer_name,
         )
+        if not self._credentials.is_live(RAZORPAY):
+            return {
+                "status": "CREATED",
+                "payment_link_url": f"https://rzp.io/i/SIMULATED-{order_id}",
+                "payment_link_id": f"plink_simulated_{order_id}",
+                "amount_paise": payload["amount"],
+                "reference_id": order_id,
+                "simulated": True,
+            }
         response = self._http.post(
             "https://api.razorpay.com/v1/payment_links",
             json=payload,
@@ -76,6 +85,18 @@ class DynamicDealmakerTool:
         buyer_phone: str,
         customer_name: str | None,
     ) -> dict[str, Any]:
+        """Build the payment-link payload.
+
+        The charged amount is computed here and is never taken from the model.
+        A language model may only influence presentation fields; a hallucinated
+        or manipulated amount must not be able to reach a payment link.
+        """
+
+        amount_paise = round(order_value * (1.0 - agreed_discount_rate) * 100)
+        description = f"Prepaid conversion for order {order_id}"
+        name = customer_name or "Buyer"
+        contact = buyer_phone
+
         if self._anthropic is not None:
             prompt = json.dumps(
                 {
@@ -86,32 +107,32 @@ class DynamicDealmakerTool:
                     "customer_name": customer_name,
                 }
             )
-            response = self._anthropic.messages.create(
-                model=DEALMAKER_MODEL,
-                max_tokens=256,
-                system=DYNAMIC_DEALMAKER_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            payload = json.loads(response.content[0].text.strip())
-            return {
-                "amount": int(payload["amount_paise"]),
-                "currency": "INR",
-                "description": payload["description"],
-                "reference_id": payload.get("reference_id", order_id),
-                "customer": {
-                    "name": payload.get("customer_name") or customer_name or "Buyer",
-                    "contact": payload.get("customer_contact", buyer_phone),
-                },
-            }
+            try:
+                response = self._anthropic.messages.create(
+                    model=DEALMAKER_MODEL,
+                    max_tokens=256,
+                    system=DYNAMIC_DEALMAKER_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                drafted = json.loads(response.content[0].text.strip())
+            except (
+                json.JSONDecodeError,
+                AttributeError,
+                IndexError,
+                KeyError,
+                TypeError,
+            ):
+                drafted = {}
+            if isinstance(drafted, dict):
+                description = str(drafted.get("description") or description)
+                name = str(drafted.get("customer_name") or name)
+                contact = str(drafted.get("customer_contact") or contact)
+                # drafted["amount_paise"] is deliberately ignored.
 
-        amount_paise = round(order_value * (1.0 - agreed_discount_rate) * 100)
         return {
             "amount": amount_paise,
             "currency": "INR",
-            "description": f"Prepaid conversion for order {order_id}",
+            "description": description,
             "reference_id": order_id,
-            "customer": {
-                "name": customer_name or "Buyer",
-                "contact": buyer_phone,
-            },
+            "customer": {"name": name, "contact": contact},
         }

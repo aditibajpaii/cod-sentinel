@@ -435,7 +435,9 @@ def cached_orders() -> pd.DataFrame:
 
 
 def _inr(value: float, *, decimals: int = 2) -> str:
-    return f"₹{value:,.{decimals}f}"
+    # Sign belongs outside the symbol: -₹120.50, not ₹-120.50.
+    sign = "-" if value < 0 else ""
+    return f"{sign}₹{abs(value):,.{decimals}f}"
 
 
 def _status_pill(label: str, kind: str) -> str:
@@ -742,18 +744,103 @@ def _live_decision_tab(engine: DecisionEngine, orders: pd.DataFrame) -> None:
         st.markdown(_all_inputs_table(row), unsafe_allow_html=True)
 
 
-def _agent_credential_strip(missing: list[str]) -> str:
-    providers = (
-        ("Anthropic", "ANTHROPIC_API_KEY"),
-        ("Google Maps", "GOOGLE_MAPS_API_KEY"),
-        ("Twilio", "TWILIO_ACCOUNT_SID"),
-        ("Razorpay", "RAZORPAY_KEY_ID"),
-    )
-    pills = []
-    for label, env_name in providers:
-        status = "pass" if env_name not in missing else "fail"
-        pills.append(_status_pill(label, status))
+def _agent_credential_strip(credentials: object) -> str:
+    """Render per-service mode: the agent runs simulated without service keys."""
+
+    missing = list(getattr(credentials, "missing", []))
+    modes = dict(getattr(credentials, "modes", {}))
+
+    pills = [
+        _status_pill(
+            "Anthropic",
+            "fail" if "ANTHROPIC_API_KEY" in missing else "pass",
+        )
+    ]
+    for label, service in (
+        ("Geocode", "geocode"),
+        ("WhatsApp", "whatsapp"),
+        ("Razorpay", "razorpay"),
+    ):
+        mode = modes.get(service, "SIMULATED")
+        pills.append(_status_pill(f"{label} · {mode.title()}", "pass"))
     return f'<div class="pill-row">{"".join(pills)}</div>'
+
+
+def _address_panel(parsed: dict) -> str:
+    """Render the address detective's parse, score, and flagged issues."""
+
+    if parsed.get("error"):
+        return f'<div class="callout warn">{escape(str(parsed["error"]))}</div>'
+
+    structured = parsed.get("structured") or {}
+    score = float(parsed.get("deliverability_score") or 0.0)
+    issues = parsed.get("issues") or []
+    tone = "good" if score >= 0.6 else "warn" if score >= 0.3 else "bad"
+
+    rows = "".join(
+        _cert_row(label, str(structured.get(key) or "—"))
+        for label, key in (
+            ("Line 1", "line1"),
+            ("Line 2", "line2"),
+            ("City", "city"),
+            ("State", "state"),
+            ("Pincode", "pincode"),
+        )
+    )
+    issue_text = (
+        ", ".join(escape(str(issue)) for issue in issues) if issues else "none"
+    )
+    return (
+        f'<div class="callout {tone}">'
+        f'<div class="action-label">Deliverability confidence</div>'
+        f'<div class="action-value">{score:.0%}</div>'
+        f"<strong>Issues:</strong> {issue_text}"
+        f"{rows}</div>"
+    )
+
+
+def _recovery_strip(recovery: dict | None) -> str:
+    """Show the order re-priced under what the agent achieved.
+
+    These are expected contributions at decision time, not realized profit and
+    not the frozen held-out evaluation in tab 03.
+    """
+
+    if not recovery:
+        return (
+            '<div class="callout">No economic recovery to price — the order '
+            "did not reach an economic action.</div>"
+        )
+
+    baseline = float(recovery["baseline_ev"])
+    achieved = float(recovery["achieved_ev"])
+    recovered = float(recovery["recovered_margin"])
+    discount = recovery.get("discount_rate")
+    tone = "good" if recovered > 0.005 else "warn" if recovered < -0.005 else ""
+    verdict = (
+        f"Agent recovered {_inr(recovered)}"
+        if recovered > 0.005
+        else (
+            f"Agent cost {_inr(abs(recovered))}"
+            if recovered < -0.005
+            else "No change — the deterministic decision already stood"
+        )
+    )
+    discount_note = (
+        f" at a {discount:.1%} prepaid discount" if discount else ""
+    )
+    return (
+        f'<div class="callout {tone}">'
+        f'<div class="action-label">Expected contribution, this order</div>'
+        f'<div class="action-value">{escape(recovery["baseline_action"])} '
+        f"{_inr(baseline)} &rarr; {escape(recovery['achieved_action'])} "
+        f"{_inr(achieved)}</div>"
+        f"<strong>{escape(verdict)}</strong>{escape(discount_note)}."
+        "<br><span class=\"action-label\">Expected value at decision time from "
+        "calibrated probabilities — not realized profit, and not the frozen "
+        "held-out evaluation in tab 03.</span>"
+        "</div>"
+    )
 
 
 def _agent_timeline(steps: list[object]) -> str:
@@ -798,14 +885,58 @@ def _agent_tab(engine: DecisionEngine, orders: pd.DataFrame) -> None:
         return
 
     credentials = load_credentials()
-    st.markdown(_agent_credential_strip(credentials.missing), unsafe_allow_html=True)
+    st.markdown(_agent_credential_strip(credentials), unsafe_allow_html=True)
     if credentials.missing:
         st.markdown(
             '<div class="callout">Missing credentials: '
             f"{escape(', '.join(credentials.missing))}. "
-            "Copy <code>.env.example</code> to <code>.env</code> and fill in live keys.</div>",
+            "Copy <code>.env.example</code> to <code>.env</code> and add them.</div>",
             unsafe_allow_html=True,
         )
+    else:
+        simulated = [
+            name.title()
+            for name, mode in credentials.modes.items()
+            if mode == "SIMULATED"
+        ]
+        if simulated:
+            st.markdown(
+                '<div class="callout">Running with simulated backends for '
+                f"<strong>{escape(', '.join(simulated))}</strong>. "
+                "Decisions, economics, and margin bounds are real; only the "
+                "external calls are stubbed. Set <code>LIVE_MODE=1</code> (or a "
+                "per-service flag) with credentials to go live.</div>",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(
+        '<p class="section-title">Address Detective</p>'
+        '<p class="section-copy">Paste a real Indian address. The agent parses '
+        "landmarks into structured fields, cross-checks the pincode, and scores "
+        "deliverability — no synthetic signal.</p>",
+        unsafe_allow_html=True,
+    )
+    probe_address = st.text_input(
+        "Messy address",
+        value="C/O Ramesh, behind SBI ATM, Ward No 4, Churu",
+        key="agent_probe_address",
+    )
+    if st.button("Parse address", key="agent_parse"):
+        from cod_sentinel.orchestrator.tools.address_detective import (
+            AddressDetectiveTool,
+        )
+
+        try:
+            parsed = AddressDetectiveTool(credentials).run(probe_address)
+        except Exception as error:  # noqa: BLE001 - surfaced to the operator
+            parsed = {"error": f"{type(error).__name__}: {error}"}
+        st.session_state["agent_parsed_address"] = parsed
+
+    parsed = st.session_state.get("agent_parsed_address")
+    if parsed:
+        st.markdown(_address_panel(parsed), unsafe_allow_html=True)
+
+    st.divider()
 
     test_orders = orders.loc[orders["split"] == "test"].reset_index(drop=True)
     c1, c2 = st.columns(2)
@@ -853,6 +984,10 @@ def _agent_tab(engine: DecisionEngine, orders: pd.DataFrame) -> None:
         st.markdown(
             f'<div class="callout"><strong>{escape(result_payload["final_status"])}</strong> '
             f"→ {escape(result_payload['selected_action'])}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            _recovery_strip(result_payload.get("recovery")),
             unsafe_allow_html=True,
         )
         if result_payload.get("payment_link_url"):

@@ -63,6 +63,8 @@ def append_step(
     input_summary: str,
     output_summary: str,
     reason_codes: tuple[str, ...] = (),
+    discount_offered: float | None = None,
+    reasoning: str | None = None,
     path: Path = AGENT_AUDIT_PATH,
 ) -> dict[str, object]:
     payload = {
@@ -74,5 +76,7 @@ def append_step(
         "input_summary": input_summary,
         "output_summary": output_summary,
         "reason_codes": list(reason_codes),
+        "discount_offered": discount_offered,
+        "reasoning": reasoning,
     }
     return append_audit_record(payload, path)

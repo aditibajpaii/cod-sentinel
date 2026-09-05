@@ -1,5 +1,10 @@
 # Failures and Corrections
 
+This file was consolidated near the end of the build, so its commit timestamp
+is later than the failures it records. Entries are ordered by when each failure
+was found, not by when this file was written. The corrections themselves are
+visible as separate commits in the git history.
+
 ## Incorrect order-value hero narrative
 
 **Failure:** The original concept claimed that a higher-value order should
@@ -86,3 +91,39 @@ inside the restricted shell sandbox.
 **Correction:** The same clean install was rerun outside that restriction. The
 editable install, import smoke check, and tests passed; no project code change
 was needed.
+
+## Training window contains no festive-season orders
+
+**Failure:** `festival_period` is constant zero across every row the models
+train and calibrate on, and non-zero only in the splits used to select and
+score them.
+
+| Split | Rows | `festival_period` share |
+| --- | --- | --- |
+| train | 13,000 | 0.000 |
+| calibration | 2,000 | 0.000 |
+| validation | 2,000 | 0.940 |
+| test | 3,000 | 0.500 |
+
+Four of the five outcome models the policy depends on inherit a festive term
+they never observed varying. `cod_logit` carries `+0.42 * festival`;
+`p_otp_rto` and `p_prepaid_failure` are both derived from `cod_logit`; and
+`p_prepaid_conversion` carries `-0.18 * festival`. Only OTP completion is
+festival-free.
+
+**Diagnosis:** The chronological split boundaries and the simulator's festive
+months were chosen independently, so the seasonal cycle fell entirely outside
+the training window. A zero-variance feature carries no signal, so both
+candidate estimators extrapolate blind across half the test split. This is a
+measured partial cause of the adverse held-out result, and a more specific
+explanation than simulator-wide OTP dominance alone: the individualized models
+were structurally unable to price the largest seasonal driver present in the
+evaluation window, while always OTP intervenes regardless of season and is
+therefore unaffected by the blindness.
+
+**Response:** Documented, deliberately not corrected. Regenerating the data
+after the policy freeze would invalidate every published number, and changing
+the data generator because we dislike a frozen result is precisely the tuning
+this project refuses elsewhere. A future `synthetic-dgp-v3` must span at least
+one complete seasonal cycle inside the training window and must be evaluated
+on a new, untouched temporal holdout.

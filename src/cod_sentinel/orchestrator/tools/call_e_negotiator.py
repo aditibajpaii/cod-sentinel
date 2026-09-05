@@ -1,11 +1,12 @@
 """Hinglish WhatsApp negotiation via Twilio."""
 
+import hashlib
 import json
 from typing import Any
 
 import httpx
 
-from cod_sentinel.orchestrator.credentials import AgentCredentials
+from cod_sentinel.orchestrator.credentials import WHATSAPP, AgentCredentials
 from cod_sentinel.orchestrator.models import NEGOTIATOR_MODEL
 from cod_sentinel.orchestrator.prompts import CALL_E_NEGOTIATOR_SYSTEM_PROMPT
 
@@ -136,6 +137,17 @@ class CallENegotiatorTool:
         return json.loads(response.content[0].text.strip())
 
     def _send_whatsapp(self, buyer_phone: str, body: str) -> dict[str, Any]:
+        if not self._credentials.is_live(WHATSAPP):
+            digest = hashlib.sha256(
+                f"{buyer_phone}|{body}".encode("utf-8")
+            ).hexdigest()[:16]
+            return {
+                "sid": f"SIMULATED-{digest}",
+                "status": "simulated",
+                "simulated": True,
+                "to": buyer_phone,
+                "body": body,
+            }
         url = (
             f"https://api.twilio.com/2010-04-01/Accounts/"
             f"{self._credentials.twilio_account_sid}/Messages.json"

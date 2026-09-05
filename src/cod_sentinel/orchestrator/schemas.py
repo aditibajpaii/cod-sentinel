@@ -59,6 +59,8 @@ class AgentStep:
     input_summary: str
     output_summary: str
     reason_codes: tuple[str, ...] = ()
+    discount_offered: float | None = None
+    reasoning: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -77,6 +79,15 @@ class AgentRunResult:
     agreed_discount_rate: float | None = None
     reason_codes: tuple[str, ...] = ()
     economics_decision_id: str | None = None
+    recovery: dict[str, Any] | None = None
+
+    @property
+    def recovered_margin(self) -> float | None:
+        """Expected contribution the agent added, or None when not priced."""
+
+        if not self.recovery:
+            return None
+        return float(self.recovery["recovered_margin"])
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -89,4 +100,5 @@ class AgentRunResult:
             "agreed_discount_rate": self.agreed_discount_rate,
             "reason_codes": list(self.reason_codes),
             "economics_decision_id": self.economics_decision_id,
+            "recovery": self.recovery,
         }

@@ -113,11 +113,46 @@ def test_outcome_cards_use_frozen_policy_numbers() -> None:
     assert "best" in html
 
 
-def test_agent_credential_strip_marks_missing_keys() -> None:
-    html = app._agent_credential_strip(["ANTHROPIC_API_KEY", "RAZORPAY_KEY_ID"])
+def _agent_credentials(**overrides):
+    from cod_sentinel.orchestrator.credentials import AgentCredentials
+
+    values = {
+        "anthropic_api_key": "key",
+        "google_maps_api_key": "",
+        "twilio_account_sid": "",
+        "twilio_auth_token": "",
+        "twilio_whatsapp_from": "",
+        "razorpay_key_id": "",
+        "razorpay_key_secret": "",
+        "cod_rto_threshold": 0.50,
+    }
+    values.update(overrides)
+    return AgentCredentials(**values)
+
+
+def test_agent_credential_strip_marks_a_missing_required_key() -> None:
+    html = app._agent_credential_strip(_agent_credentials(anthropic_api_key=""))
+
     assert "Anthropic" in html
     assert "pill-fail" in html
-    assert "pill-pass" in html
+
+
+def test_agent_credential_strip_reports_simulated_services_as_healthy() -> None:
+    """Missing service keys are a mode, not a failure."""
+
+    html = app._agent_credential_strip(_agent_credentials())
+
+    assert "pill-fail" not in html
+    assert "Razorpay · Simulated" in html
+    assert "WhatsApp · Simulated" in html
+
+
+def test_agent_credential_strip_shows_live_services() -> None:
+    html = app._agent_credential_strip(
+        _agent_credentials(razorpay_key_id="rzp", razorpay_key_secret="s", live_razorpay=True)
+    )
+
+    assert "Razorpay · Live" in html
 
 
 def test_agent_timeline_renders_steps() -> None:

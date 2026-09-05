@@ -24,6 +24,37 @@ policy. The paired customer-cluster bootstrap interval for COD Sentinel minus
 the best simple baseline is entirely negative. No post-test tuning was
 performed.
 
+## OTP friction is priced per order, but not across a customer's lifetime
+
+Buyer drop-off at OTP **is** modeled: `p_otp_completion` varies with intent,
+price sensitivity, phone verification, and order timing, and realized OTP
+completion on the held-out test split is 0.794 — roughly one in five OTP
+attempts is abandoned, and a non-completing order earns nothing but the
+verification fee. Always-OTP wins here despite paying that toll.
+
+What is **not** modeled is the cost of that friction beyond the current order.
+A high-intent repeat buyer who meets an OTP wall may order less often, or stop.
+That lifetime effect would count against a universal-OTP policy and in favour of
+targeted intervention, and it is entirely absent from a per-order contribution
+number. We therefore do not claim it: the comparison in this repo is a
+single-order comparison, and always-OTP wins it on the stated terms.
+
+## Agent recovery is expected, not realized
+
+The recovered-margin figures the agent reports are expected contributions from
+calibrated probabilities at decision time. They are not realized profit and are
+not part of the frozen held-out evaluation in `results/metrics.json`. Recovery
+is only counted when the agent changes the action; re-pricing an action the
+deterministic policy had already chosen would credit the agent with a gain it
+did not produce.
+
+## Simulated buyer conversation
+
+Call-E's negotiation is evaluated against simulated buyer replies, not real
+ones. Whether a real buyer accepts a given prepaid discount is exactly the
+quantity a live experiment would have to measure, and no number in this repo
+estimates it.
+
 ## Moderate risk-model discrimination
 
 The held-out COD model has PR-AUC 0.505 at an RTO prevalence of approximately

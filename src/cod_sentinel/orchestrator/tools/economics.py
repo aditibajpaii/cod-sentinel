@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import Any, Mapping
 
 from cod_sentinel.economics import max_profitable_prepaid_discount
+from cod_sentinel.orchestrator.recovery import action_probabilities
 from cod_sentinel.policy import DecisionEngine
 from cod_sentinel.schemas import Action, ActionProbabilities, OrderEconomics
 
@@ -67,14 +68,5 @@ class EconomicsTool:
         action: Action,
         probabilities: Mapping[str, float],
     ) -> ActionProbabilities:
-        if action is Action.COD:
-            return ActionProbabilities.for_cod(probabilities["cod_rto"])
-        if action is Action.OTP:
-            return ActionProbabilities(
-                conversion_probability=probabilities["otp_completion"],
-                delivery_probability=1.0 - probabilities["otp_rto"],
-            )
-        return ActionProbabilities(
-            conversion_probability=probabilities["prepaid_conversion"],
-            delivery_probability=1.0 - probabilities["prepaid_failure"],
-        )
+        # Single source of truth, shared with post-agent recovery pricing.
+        return action_probabilities(action, probabilities)

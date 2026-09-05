@@ -1,4 +1,4 @@
-.PHONY: install test smoke pipeline generate leakage train freeze evaluate plots ledger-sample app install-agent agent-demo
+.PHONY: install test smoke pipeline generate leakage train freeze evaluate plots ledger-sample app install-agent agent-demo webhook
 
 PYTHON ?= python3
 
@@ -44,6 +44,9 @@ ledger-sample:
 
 app:
 	$(PYTHON) -m streamlit run app.py
+
+webhook:
+	$(PYTHON) -c "from cod_sentinel.orchestrator.webhook import main; main()"
 
 agent-demo:
 	@test -n "$(ORDER_ID)" || (echo "Set ORDER_ID=..." && exit 1)

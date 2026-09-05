@@ -20,6 +20,10 @@ artifacts/*
 !artifacts/model_metadata.json
 !artifacts/observable_orders.csv
 !artifacts/splits.json
+!artifacts/decision_ledger_sample.jsonl
 results/*
 !results/.gitkeep
 !results/metrics.json
+!results/reliability_cod_rto.png
+!results/policy_contribution.png
+!results/action_distribution.png

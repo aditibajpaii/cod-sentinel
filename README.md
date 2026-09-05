@@ -2,14 +2,45 @@
 
 **Razorpay AI Buildathon · Track 02 · AI Risk Manager**
 
-**Risk tells you what might happen. COD Sentinel decides what to do about it.**
-It estimates COD RTO risk and action-specific outcomes, prices the expected
-contribution of COD, OTP, and prepaid against each other, and evaluates the
-frozen policy against temporally held-out synthetic potential outcomes — a
-supervised decision engine, not a risk score.
+## A hybrid agentic risk architecture
+
+**Autonomous negotiation agents on top. Deterministic economic guardrails
+underneath.**
+
+A risk score tells a merchant an order looks bad. It does not recover the order.
+COD Sentinel puts an **autonomous recovery agent** in front of every risky COD
+checkout — it parses a chaotic Indian address, negotiates a prepaid conversion
+with the buyer in Hinglish over WhatsApp, and issues a Razorpay payment link —
+while a deterministic economics engine underneath decides, per order, what the
+agent is allowed to give away.
 
 > Risk prediction is only the first step. The merchant decision is what to do
-> with that risk.
+> with that risk — and then actually doing it.
+
+```text
+        ┌─────────────────────────────────────────────┐
+        │  AGENT LOOP  (Claude, tool-calling)         │
+        │  address detective → negotiator → dealmaker │
+        └───────────────────┬─────────────────────────┘
+                            │  every action priced against
+        ┌───────────────────▼─────────────────────────┐
+        │  ECONOMIC GUARDRAIL  (deterministic)        │
+        │  EV(COD) vs EV(OTP) vs EV(PREPAID),         │
+        │  max profitable discount, frozen + testable │
+        └─────────────────────────────────────────────┘
+```
+
+The guardrail is what makes the agent safe to run: it computes each order's
+**maximum profitable discount before the agent starts**, and the payment-link
+tool rejects anything above it. The agent chooses *what to attempt*; economics
+decides *what is affordable*. Neither can be removed without breaking the other.
+
+When the agent converts an order, the system re-prices it and reports the margin
+actually recovered — expected contribution before and after, per order.
+
+The whole loop runs on a clean clone with **only an `ANTHROPIC_API_KEY`** —
+geocoding, WhatsApp, and payment links ship with simulated backends and switch
+to live APIs by environment flag, with no code change.
 
 ## The result, up front
 
@@ -63,25 +94,37 @@ Separate oracle outcomes
 REVIEW is a safety fallback and never participates in economic maximization.
 The outcome models are supervised simulator models, not causal estimators.
 
-### Why a pipeline, not an agent
+### Why recovery is agentic
 
-Every decision must be reproducible from frozen artifacts: the same order and
-the same model bundle must produce the same action and the same decision ID.
-That property is what makes the held-out evaluation and the per-decision
-record meaningful. An agent loop would introduce nondeterminism between the
-score and the action for no gain in decision quality — choosing among COD,
-OTP, and prepaid is a three-way expected-value comparison with a closed-form
-answer, not a planning problem.
+Recovering a risky order is a planning problem. Whether to validate a malformed
+address first, whether to negotiate at all, whether a buyer's Hinglish reply
+counts as agreement, and when to give up — these are open-ended, and each step's
+result changes what should happen next. No decision tree survives contact with
+"Opposite Hanuman Temple, near electric pole, 2nd floor, Sharma Colony."
 
-No language model sits on the runtime path, and that is a scope decision
-rather than an omission. The place a language model would earn its keep is
-address deliverability: real delivery addresses are unstructured text where
-deterministic parsing is brittle, and a narrow, schema-validated call that
-fails open to the deterministic features would reach signal this feature set
-cannot. This simulator emits a scalar `address_quality_signal` rather than
-free-text addresses, so an address model here would be decoration measured
-against nothing. It belongs in a version evaluated on real addresses, with an
-ablation reporting what it adds.
+So the orchestrator is a real tool-calling loop: Claude receives the order's
+economics and decides which specialists to invoke and in what order, bounded by
+a hard cap of five tool calls and a forced fallback when it is exhausted. Every
+call is recorded as a hash-chained audit record carrying the tool, the model,
+the discount offered, and the model's stated reasoning.
+
+### Why the guardrail underneath is deterministic
+
+Pricing is the one thing that must never be improvised. Choosing among COD, OTP,
+and prepaid is a closed-form expected-value comparison, and it has to be
+reproducible: the same order and the same model bundle produce the same action
+and the same decision ID, which is what makes the held-out evaluation and the
+audit trail mean anything.
+
+So no language model prices an order, and none can widen a discount.
+`max_profitable_prepaid_discount` solves for each order's break-even discount
+before the agent starts, and the payment-link tool rejects anything above it —
+a hallucinated rate, an over-eager negotiation, or a manipulated model response
+all hit the same wall. The charged amount is recomputed in Python and never read
+back from the model.
+
+That boundary is the architecture, not a limitation of it: **an agent that can
+act freely because it cannot act unprofitably.**
 
 ## Clean-clone workflow
 
@@ -109,13 +152,36 @@ exact dependency reproduction is needed.
 The core project does not require credentials. Optional agent integrations
 (Anthropic, Google Maps, Twilio, Razorpay) are documented in `.env.example`.
 
-### Optional agent overlay (Tab 04)
+### Running the recovery agent
 
-After `make install-agent`, configure `.env` and open tab **04 Agent** in the
-Streamlit app (or run `make agent-demo ORDER_ID=... ADDRESS="..." PHONE=...+91...`).
-This stretch layer sequences address validation, Hinglish WhatsApp prepaid
-negotiation, and Razorpay payment links. It does not change frozen tab 03
+```bash
+make install-agent
+export ANTHROPIC_API_KEY=...        # the only credential required
+make agent-demo ORDER_ID=ORDER-017000 ADDRESS="near big tree, gali no 4" PHONE=+919876543210
+```
+
+Geocoding, WhatsApp, and Razorpay run against simulated backends by default, so
+the full loop works with no other account. Set `LIVE_MODE=1` — or
+`LIVE_GEOCODE`, `LIVE_WHATSAPP`, `LIVE_RAZORPAY` individually — plus that
+service's credentials to switch to real APIs without touching code.
+
+The same flow is available as tab **04 Agent** in the Streamlit app, and as an
+HTTP endpoint for checkout integration:
+
+```bash
+make webhook     # POST a Magic Checkout-shaped payload to /api/order-webhook
+```
+
+The webhook returns an actionable instruction — `DISPATCH`,
+`CONVERT_TO_PREPAID_VIA_LINK` (with the payment link), or `REVIEW` — plus the
+decision ID and the full step trail. None of this changes the frozen tab 03
 evidence or the deterministic tab 02 decision path.
+
+**Consent.** Call-E sends commercial messages to buyers. A production deployment
+would require explicit prior opt-in consent under India's DPDP Act, 2023 and
+TRAI's commercial-communication regulations, with a working opt-out on every
+message and sender registration on the merchant's behalf. This prototype only
+messages synthetic buyers, and ships with WhatsApp simulated by default.
 
 ## Data and evaluation protocol
 

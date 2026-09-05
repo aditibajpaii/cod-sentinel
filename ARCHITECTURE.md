@@ -82,6 +82,20 @@ produce a runtime feature, model input, expected value, or action.
   economics. It cannot import simulator potential outcomes.
 - `evaluation.py` is the only layer that maps selected actions to held-out
   potential outcomes.
+- `ledger.py` is an append-only decision sink with hash-chained records and
+  replay verification. Nothing in the runtime path reads it, `decide` never
+  writes to it, and it records only the runtime feature allowlist.
+- `orchestrator/` is the recovery agent layer. `runner.py` runs a Claude
+  tool-calling loop over `client.TOOL_DEFINITIONS`, capped at five calls with a
+  forced fallback to the deterministic decision. `tools/` holds the specialists
+  (address detective, Call-E negotiator, dynamic dealmaker) and `tools/economics.py`
+  wraps the frozen policy. `recovery.py` re-prices an order under the action the
+  agent achieved. `credentials.py` routes each external service to a simulated or
+  live backend. `webhook.py` exposes `POST /api/order-webhook`.
+- The agent may sequence actions but may not price them. Economics is computed
+  before the loop starts, the prepaid discount ceiling comes from
+  `max_profitable_prepaid_discount`, and the charged amount is recomputed in
+  Python rather than read from a model response.
 - `app.py` is a read-mostly adapter over frozen package artifacts; it owns no
   training or business logic.
 

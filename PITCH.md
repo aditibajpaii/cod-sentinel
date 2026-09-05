@@ -3,10 +3,9 @@
 Every empirical statement below refers to the temporally held-out synthetic
 simulator. Do not remove that qualifier.
 
-**The hook, memorized first:** *"Risk is not the decision. We built the
-economic layer that sits after the risk score — and when the honest answer
-was that a simpler policy wins, we said so on stage instead of tuning it
-away."*
+**The hook, memorized first:** *"A risk score tells you an order will fail. It
+doesn't save the order. We built the agent that saves it — and the economic
+guardrail that stops it giving away the margin."*
 
 **Numbers to have cold:**
 
@@ -16,112 +15,162 @@ away."*
 | COD Sentinel | 218.49 |
 | Always OTP (best simple baseline) | 242.31 |
 
-COD Sentinel: **+65.71 vs always-COD**, **−23.81 vs always-OTP**. COD RTO
-model: precision 0.411, recall 0.902, PR-AUC 0.505, Brier 0.227.
+COD Sentinel: **+65.71 vs always-COD**, **−23.81 vs always-OTP**. COD RTO model:
+precision 0.411, recall 0.902, PR-AUC 0.505, Brier 0.227.
 
-## 0:00–0:30 — Problem
+Agent reach, measured on the first 400 held-out orders: **151 have profitable
+prepaid discount headroom, and on 64 of those the agent can actually change the
+action** — that is the recoverable population. Realized OTP completion is
+**79.4%**, so one in five OTP attempts is abandoned. **138 tests pass**; one
+live-API test skips without credentials.
 
-“An RTO classifier tells a merchant which COD orders look risky. It does not
-tell the merchant whether COD, OTP verification, or prepaid conversion is the
-economically best response. A false positive can prevent an RTO—or destroy a
-good sale.”
+---
 
-Show the title and thesis.
+## 0:00–0:35 — Problem
 
-## 0:30–1:10 — Architecture
+"An RTO classifier tells a merchant which COD orders look risky. It does not
+tell the merchant what to do, and it certainly doesn't do it. A false positive
+doesn't just cost a prediction — it destroys a good sale."
 
-Show `ARCHITECTURE.md`.
+"So we asked a different question: not *how risky is this order*, but *how do we
+recover it, and what is it worth recovering?*"
 
-“COD Sentinel separates observable runtime data from simulator oracle data.
-Prior-only features feed five calibrated outcome models. A shared economic
-state model prices COD, OTP, and prepaid. REVIEW is only a safety fallback.
-Potential outcomes are visible only after the frozen policy chooses an action.”
+## 0:35–1:15 — Architecture: agent on top, guardrail underneath
 
-Mention the 13k/2k/2k/3k chronological split and delayed outcome-observation
-timestamps.
+Show the architecture diagram in `README.md`.
 
-## 1:10–2:05 — Economics tab
+"Two layers. On top, a Claude tool-calling loop that decides how to rescue a
+risky order: parse the address, negotiate over WhatsApp, issue a payment link.
+Underneath, a deterministic economics engine that prices every action and
+computes — before the agent starts — the maximum discount this specific order
+can afford."
 
-Open the Economics tab.
+"The agent decides what to attempt. Economics decides what's affordable. The
+payment-link tool rejects any discount above the ceiling, and the charged amount
+is recomputed in Python, never read back from the model. That's what makes it
+safe to let an LLM talk to buyers about money."
 
-Change margin, forward shipping, reverse shipping, and damage probability.
+## 1:15–2:30 — Live agent demo (Tab 04)
 
-“There is no universal RTO threshold. The break-even point follows from the
-same branch accounting used by policy decisions. It changes with fixed
-logistics, margin, and inventory recovery. We corrected an early inverted
-order-value narrative by deriving and testing this curve.”
+Paste a chaotic address: `C/O Ramesh, behind SBI ATM, Ward No 4, Churu`.
 
-## 2:05–2:55 — Live Decision tab
+"Address Detective parses landmarks into structured fields and scores
+deliverability. Real Indian addresses are text, not a tidy schema."
 
-Select a synthetic test order and vary order value, prior RTO rate, and address
-quality.
+Run the orchestrator on a high-RTO COD order.
 
-“The models estimate COD RTO, OTP completion and post-completion failure, and
-prepaid conversion and post-conversion failure. The policy calculates all
-three expected contributions and deterministically selects the maximum. No
-simulator truth enters this screen.”
+"Watch the loop: economics prices the order, the agent decides to negotiate,
+Call-E writes Hinglish, the buyer agrees, and the dealmaker issues a Razorpay
+link — at 1%, because economics said 2% was this order's break-even."
 
-Point to the decision ID, versions, EVs, and reason codes.
+Point at the recovery strip: **OTP ₹X → PREPAID ₹Y, recovered ₹Z**.
 
-## 2:55–4:15 — Held-Out Evaluation tab
+"That's the loop closing. The agent's outcome re-prices the order. We only count
+recovery when the agent actually *changed* the action — if the policy was
+already going to convert this order, the agent gets credit for nothing."
 
-“The held-out COD model achieved precision 0.411, recall 0.902, PR-AUC 0.505,
-and Brier score 0.227.”
+Note the mode pills: everything ran with no Razorpay, Twilio, or Google account.
 
-“COD Sentinel improved realized simulator contribution from ₹152.78 per order
-under always COD to ₹218.49. The customer-cluster bootstrap interval for that
-improvement is ₹48.78 to ₹82.74 per order.”
+## 2:30–3:00 — Economics tab
+
+Change margin, forward shipping, reverse shipping, damage probability.
+
+"There is no universal RTO threshold. Break-even risk follows from the same
+branch accounting the policy and the agent's discount ceiling both use. We
+corrected an early inverted order-value narrative by deriving and testing it."
+
+## 3:00–4:15 — Held-out evaluation, including the result that beat us
+
+"Held-out COD model: precision 0.411, recall 0.902, PR-AUC 0.505, Brier 0.227."
+
+"COD Sentinel improved realized contribution from ₹152.78 under always-COD to
+₹218.49, with a customer-cluster bootstrap interval of ₹48.78 to ₹82.74."
 
 Then state the adverse result directly:
 
-“But the strongest simple baseline—always OTP—reached ₹242.31 per order.
-COD Sentinel trails it by ₹23.81 per order, with an entirely negative paired
-cluster-bootstrap interval. We did not tune this away after seeing test data.”
+"But the strongest simple baseline — always OTP — reached ₹242.31. We trail it
+by ₹23.81 per order, with an entirely negative paired interval. We did not tune
+that away after seeing test data."
 
-Explain why:
+Explain why, with the measured cause:
 
-“This simulator makes OTP inexpensive and broadly effective. Individualized
-outcome-model errors cost more than targeting saves. The architecture works,
-but v2 does not justify its complexity against the strongest baseline.”
+"Two reasons. OTP is broadly effective in this simulator. And our own split
+starved the models: festival months are zero percent of training but half the
+test window, and four of five outcome models inherit a festive term they never
+saw vary."
 
-Show false-positive cost, action distribution, calibration, and sensitivity.
+"That result is *why the agent exists*. If a universal policy beats an
+individualized optimizer, stop optimizing the choice and start recovering the
+order. Selection was the wrong lever; intervention is the right one."
 
 ## 4:15–4:45 — Engineering evidence
 
-Show `FAILURES.md` and test output.
+Show `FAILURES.md`, test output, the committed plots, and
+`artifacts/agent_audit.jsonl`.
 
-“Red-team review found delayed-label leakage, incorrect conditioning for two
+"Red-team review found delayed-label leakage, incorrect conditioning for two
 models, unbound artifacts, and a pickle entrypoint defect. We fixed each,
 versioned a new DGP, added regression tests, and preserved the adverse result.
-A clean clone reproduces all 90 tests and the complete pipeline.”
+Every agent decision is a hash-chained audit record that replays to the same
+decision ID, so model drift and a tampered log are separately detectable. A
+clean clone reproduces 138 passing tests and the complete pipeline."
 
 ## 4:45–5:00 — Close
 
-“COD Sentinel demonstrates the right question and an honest way to answer it:
-risk is not the decision. The next experiment needs real merchant economics
-and randomized intervention data. The current evidence tells us something
-useful already: when a simple OTP policy wins, do not ship a more complex
-optimizer.”
+"Risk is not the decision, and the decision is not the outcome. The honest
+result — that a simple baseline beat our optimizer — is what pointed us at the
+agent. The next experiment needs real merchant economics and logged propensities
+so we can measure recovery causally instead of in expectation. What we can say
+today is narrower and true: the guardrail makes the agent safe, and the agent is
+what makes the risk score worth having."
+
+---
 
 ## Judge questions
 
-### Why not just use an RTO classifier?
+### If "Always OTP" beats you by ₹23.81, why not ship that and fire the ML team?
 
-A classifier estimates risk. It does not price intervention friction,
-conversion loss, shipping, damage, or recovery. COD Sentinel makes those
-assumptions explicit and tests whether individualized decisions beat simple
-policies.
+Ship it — for the orders where it wins. That result is in our README because we
+believe it.
 
-### Why does the sophisticated policy lose?
+But notice what always-OTP is: friction applied to every buyer, including the
+ones who would have paid happily. Our simulator already models the cost —
+**realized OTP completion is 79.4%, so one in five OTP attempts is abandoned**,
+and a non-completing order earns nothing but the verification fee. Always-OTP
+wins here *despite* paying that toll on every order, because our individualized
+targeting wasn't accurate enough to beat it.
 
-OTP is broadly dominant in this DGP, while action-outcome estimates are
-imperfect. Complexity is not value. The held-out comparison correctly rejects
-the stronger claim.
+What the simulator does **not** model is the part that matters most to a real
+merchant: repeat-purchase behaviour. A high-intent returning buyer who hits an
+OTP wall may not come back, and that lifetime cost never appears in a per-order
+contribution number. We won't claim a number we didn't measure — that's the
+honest limit of this evidence, and it's in `LIMITATIONS.md`.
+
+The deeper answer: this comparison is about *selection*, and selection is the
+lever we lost on. The agent is a different lever — it doesn't pick between
+existing options, it creates a new one by recovering the order.
+
+### Where is the actual generative AI here?
+
+In the loop, not beside it. `runner.py` runs a hand-rolled Claude tool-calling
+loop over four tools with a five-call cap. Claude sequences address validation,
+Hinglish negotiation, and payment-link creation, and its reasoning is recorded
+per step in the audit log. What Claude is *not* allowed to do is price an order
+or set a discount — that's the guardrail, and it's deliberate.
+
+### Why not let the agent own the economics too?
+
+Because then a hallucinated discount becomes a real refund. We tested that path:
+when the model asks for a 90% discount, the ceiling rejects it; when it returns
+a fabricated payment amount, we ignore the number and recompute. Both are
+regression tests. An agent that cannot act unprofitably is one you can actually
+let run.
 
 ### Is this causal?
 
-No. These are supervised simulator outcome models. Real deployment requires
-logged propensities or randomized intervention data.
+No. These are supervised simulator outcome models, and the recovery figures are
+expected contributions at decision time, not realized profit. Real deployment
+requires logged propensities or randomized intervention data.
 
 ### Did test data affect training?
 
@@ -131,6 +180,6 @@ Thresholds freeze on validation before a separate test command.
 
 ### What is the oracle?
 
-Two different references are reported: a Bayes oracle using true DGP
-probabilities, and a clearly labeled clairvoyant realized hindsight bound. Only
-the former is meaningful expected regret; neither is deployable.
+Two references are reported: a Bayes oracle using true DGP probabilities, and a
+clearly labeled clairvoyant realized hindsight bound. Only the former is
+meaningful expected regret; neither is deployable.
